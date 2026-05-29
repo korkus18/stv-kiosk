@@ -1,0 +1,10 @@
+{
+  "name": "STV GROUP — Kiosk",
+  "short_name": "STV Kiosk",
+  "description": "STV GROUP a.s. — interactive product kiosk for trade shows.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#f8f8fa",
+  "theme_color": "#0072bc"
+}

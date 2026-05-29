@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800;900&family=Barlow:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg-primary: #08090b;
+  --bg-surface: #0d0f13;
+  --bg-card: #12151a;
+  --bg-card-hover: #181d26;
+  --border: rgba(255,255,255,0.06);
+  --border-hover: rgba(255,255,255,0.12);
+  --stv-blue: #0072bc;
+  --stv-blue-dim: #005a96;
+  --stv-gray: #59637c;
+  --text-primary: #e8e6e0;
+  --text-secondary: #8a8f9c;
+  --text-muted: #555a66;
+  --gold: #c8a040;
+
+  /* legacy aliases */
+  --blue: #0072bc;
+  --gray: #59637c;
+  --bg: #08090b;
+  --surface: #0d0f14;
+  --card: #0f1218;
+  --border-color: #1e2330;
+  --text: #e8e6e0;
+  --muted: #6e7585;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Barlow', sans-serif;
+  font-weight: 300;
+  overflow-x: hidden;
+}
+
+html {
+  max-width: 100vw;
+}
+
+:focus-visible { outline: 1px solid var(--stv-blue); outline-offset: 2px; }
+::selection { background: rgba(0,114,188,0.28); color: var(--text-primary); }
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border-color, #1e2330); }
+::-webkit-scrollbar-thumb:hover { background: var(--stv-blue); }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+a { color: inherit; text-decoration: none; }
+
+/* Hide the Next.js dev-mode indicator — it overlaps the portrait
+   BROWSE INVENTORY tab. Activated by the kiosk page via body class.
+   In production builds the dev indicator is never rendered, so this
+   is a dev-only cosmetic rule. */
+body.hide-next-dev-indicator nextjs-portal { display: none !important; }
+
