@@ -1,22 +1,54 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
   PRODUCTS,
   getProductById,
   getProductsByCategory,
+  isVisible,
 } from '@/data/products'
+import type { Product } from '@/data/products'
 import type { CategoryId } from '@/data/categories'
 import { useOrientation } from '@/hooks/useOrientation'
+import { useKioskMode } from '@/hooks/useKioskMode'
+import { useAttractLoop } from '@/hooks/useAttractLoop'
 import { KioskLandscape } from '@/components/kiosk/KioskLandscape'
 import { KioskPortrait } from '@/components/kiosk/KioskPortrait'
 import type { KioskSharedProps } from '@/components/kiosk/utils'
 
+/** Attract defaults the kiosk returns to after a visitor leaves. */
+const ATTRACT_DEFAULT_CATEGORY: CategoryId | 'all' = 'all'
+
+/**
+ * Products the attract loop may show: those with a model, minus any that failed
+ * to load. Data-driven — if any product is `featured`, the loop plays ONLY
+ * featured ones; otherwise it plays all playable products.
+ */
+function computeAttractPool(broken: ReadonlySet<string>): Product[] {
+  const playable = PRODUCTS.filter(
+    (p) => isVisible(p) && p.model3D && !broken.has(p.id),
+  )
+  const featured = playable.filter((p) => p.featured)
+  return featured.length > 0 ? featured : playable
+}
+
 export default function KioskPage() {
-  const [activeCategory, setActiveCategory] = useState<CategoryId | 'all'>('all')
+  // Models that failed to load at runtime — excluded from the attract pool.
+  const [brokenIds, setBrokenIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const attractPool = useMemo(
+    () => computeAttractPool(brokenIds),
+    [brokenIds],
+  )
+  const attractDefaultId = attractPool[0]?.id ?? PRODUCTS[0]?.id ?? ''
+
+  const [activeCategory, setActiveCategory] = useState<CategoryId | 'all'>(
+    ATTRACT_DEFAULT_CATEGORY,
+  )
   const [selectedProductId, setSelectedProductId] = useState<string>(
-    PRODUCTS[0]?.id ?? '',
+    attractDefaultId,
   )
 
   const filteredProducts = useMemo(
@@ -50,6 +82,71 @@ export default function KioskPage() {
 
   const orientation = useOrientation()
 
+  // State machine lives here, above the layout components, so attract/active
+  // behave identically in both orientations. On reset we wipe any trace of the
+  // previous visitor: category + selected product back to attract defaults.
+  // (Camera/zoom reset is owned by the canvas — wired in a later step.)
+  const { mode, activate, resetToAttract } = useKioskMode({
+    onReset: () => {
+      setActiveCategory(ATTRACT_DEFAULT_CATEGORY)
+      setSelectedProductId(attractDefaultId)
+    },
+  })
+  void resetToAttract // exposed for later steps (e.g. an explicit exit button)
+
+  // Attract auto-cycle (timing only; prefetch/dispose live in KioskCanvas).
+  useAttractLoop({
+    enabled: mode === 'attract',
+    pool: attractPool,
+    selectedId: selectedProductId,
+    setSelectedId: setSelectedProductId,
+  })
+
+  // Exploded-view state lives above both layouts. `explodable` is reported by
+  // the canvas once a model loads; reset both whenever the product changes or
+  // we leave active so a new model always starts assembled.
+  const [exploded, setExploded] = useState(false)
+  const [explodable, setExplodable] = useState(false)
+  useEffect(() => {
+    setExploded(false)
+    setExplodable(false)
+  }, [selectedProductId])
+  useEffect(() => {
+    if (mode !== 'active') setExploded(false)
+  }, [mode])
+
+  // A model that throws on load is marked broken so the loop skips it forever.
+  const onModelError = useCallback((url: string) => {
+    const product = PRODUCTS.find((p) => p.model3D === url)
+    console.warn('[attract] model failed to load, skipping:', url)
+    if (!product) return
+    setBrokenIds((prev) => {
+      if (prev.has(product.id)) return prev
+      const next = new Set(prev)
+      next.add(product.id)
+      return next
+    })
+  }, [])
+
+  // One-time log of products the attract loop will never show (no model).
+  useEffect(() => {
+    const noModel = PRODUCTS.filter((p) => !p.model3D)
+    if (noModel.length > 0) {
+      console.info(
+        `[attract] ${noModel.length} product(s) skipped (no 3D model):`,
+        noModel.map((p) => p.id),
+      )
+    }
+  }, [])
+
+  // Prefetch the NEXT attract model for a seamless crossfade (attract only).
+  const prefetchUrl = useMemo(() => {
+    if (mode !== 'attract' || attractPool.length <= 1) return undefined
+    const i = attractPool.findIndex((p) => p.id === selectedProductId)
+    const next = attractPool[(Math.max(i, 0) + 1) % attractPool.length]
+    return next?.model3D ?? undefined
+  }, [mode, attractPool, selectedProductId])
+
   const sharedProps: KioskSharedProps = {
     activeCategory,
     setActiveCategory,
@@ -57,6 +154,14 @@ export default function KioskPage() {
     setSelectedProductId,
     selectedProduct,
     filteredProducts,
+    mode,
+    onActivate: activate,
+    onModelError,
+    prefetchUrl,
+    exploded,
+    explodable,
+    onToggleExplode: () => setExploded((e) => !e),
+    onExplodableChange: setExplodable,
   }
 
   return orientation === 'portrait' ? (

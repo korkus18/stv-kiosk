@@ -41,3 +41,7 @@ next-env.d.ts
 
 # reference materials (PDFs, audit docs — kept locally only)
 /reference/
+
+# 3D model buffers exceeding GitHub 100MB limit — kept local, shipped via static export (out/)
+/public/models/rocket_122mm_he_grad/
+/public/models/round_152mm_he_full/

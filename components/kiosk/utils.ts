@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { Product } from '@/data/products'
 import type { CategoryId } from '@/data/categories'
+import type { KioskMode } from '@/hooks/useKioskMode'
 
 export type KioskSharedProps = {
   activeCategory: CategoryId | 'all'
@@ -9,6 +10,19 @@ export type KioskSharedProps = {
   setSelectedProductId: (id: string) => void
   selectedProduct: Product | undefined
   filteredProducts: Product[]
+  /** Interaction mode — attract (idle) vs active (touched). */
+  mode: KioskMode
+  /** Enter active mode; called by the attract-overlay touch catcher. */
+  onActivate: () => void
+  /** Reports a model url that failed to load (attract loop skips it). */
+  onModelError: (url: string) => void
+  /** Next attract model to prefetch (undefined in active). */
+  prefetchUrl?: string
+  /** Exploded view: state + toggle + capability report (driven by the canvas). */
+  exploded: boolean
+  explodable: boolean
+  onToggleExplode: () => void
+  onExplodableChange: (explodable: boolean) => void
 }
 
 // ── HUD anchor positions (modelGroup local space) ─────────────────────────
@@ -118,6 +132,17 @@ export function getSubtype(product: Product): string {
   }
 
   return product.name.split(' ')[0].toUpperCase()
+}
+
+const NBSP = String.fromCharCode(0xa0)
+
+/**
+ * Glue the last two words with a non-breaking space so a product name never
+ * wraps a single trailing character/word onto its own line (e.g. the lone "M"
+ * in "BANGALORE TORPEDO 8 X 1 M").
+ */
+export function preventOrphan(s: string): string {
+  return s.replace(/\s+(\S+)\s*$/, (_m, last: string) => NBSP + last)
 }
 
 export function formatDescription(description: string | null): string {
