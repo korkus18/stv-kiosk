@@ -47,12 +47,32 @@ export function HudChip({
   useEffect(() => {
     if (!mounted) return
     let raf = 0
+    const PAD = 18 // keep clear of the viewport edge
+    const LEADER = 30 // callout line + bracket reach on the aligned side
+    const BRACKET = 16 // bracket sits above the chip body
+
     const tick = () => {
       const state = anchorStateRef.current[id]
       const el = wrapperRef.current
       if (el && state) {
-        const targetX = state.x + chipOffset.x
-        const targetY = state.y + chipOffset.y
+        let targetX = state.x + chipOffset.x
+        let targetY = state.y + chipOffset.y
+
+        // Clamp so the whole chip — incl. its leader/bracket — stays on-screen
+        // with padding. Chip is centred on (targetX,targetY) via translate(-50%).
+        const w = el.offsetWidth
+        const h = el.offsetHeight
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        const leftExt = w / 2 + (align === 'left' ? LEADER : 0)
+        const rightExt = w / 2 + (align === 'right' ? LEADER : 0)
+        const minX = PAD + leftExt
+        const maxX = vw - PAD - rightExt
+        if (minX <= maxX) targetX = Math.min(Math.max(targetX, minX), maxX)
+        const minY = PAD + h / 2 + BRACKET
+        const maxY = vh - PAD - h / 2
+        if (minY <= maxY) targetY = Math.min(Math.max(targetY, minY), maxY)
+
         el.style.transform = `translate(${targetX}px, ${targetY}px) translate(-50%, -50%)`
 
         let opacity = 1
@@ -65,7 +85,7 @@ export function HudChip({
     }
     tick()
     return () => cancelAnimationFrame(raf)
-  }, [id, mounted, isFocused, isMuted, anchorStateRef, chipOffset.x, chipOffset.y])
+  }, [id, mounted, isFocused, isMuted, anchorStateRef, chipOffset.x, chipOffset.y, align])
 
   return (
     <motion.div

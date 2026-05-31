@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import StvLion from '@/components/icons/StvLion'
 import STVLogo from '@/components/ui/STVLogo'
+import { AttractOverlay } from './AttractOverlay'
+import { ProductDetailQr } from './ProductDetailQr'
+import { ExplodeButton } from './ExplodeButton'
 import { EmptyModelPlaceholder } from './EmptyModelPlaceholder'
 import { CategoryFilter } from './CategoryFilter'
 import { InventorySidebar } from './InventorySidebar'
@@ -21,6 +24,7 @@ import {
   formatDescription,
   getSubtitle,
   pickChipValues,
+  preventOrphan,
   type KioskSharedProps,
 } from './utils'
 
@@ -40,8 +44,22 @@ export function KioskLandscape({
   setSelectedProductId,
   selectedProduct,
   filteredProducts,
+  mode,
+  onActivate,
+  onModelError,
+  prefetchUrl,
+  exploded,
+  explodable,
+  onToggleExplode,
+  onExplodableChange,
 }: KioskSharedProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Attract shows ONLY the model (+ touch prompt); active reveals the full
+  // informed UI. Data chrome below is gated on this.
+  const isActive = mode === 'active'
+  // HUD chips are DOM-positioned (their own paint layer), so the QR modal can't
+  // out-z-index them — hide them outright while the modal is open.
+  const [qrOpen, setQrOpen] = useState(false)
 
   // Keyboard nav
   useEffect(() => {
@@ -132,7 +150,9 @@ export function KioskLandscape({
             overflowX: 'auto',
           }}
         >
-          <CategoryFilter active={activeCategory} onChange={setActiveCategory} />
+          {isActive && (
+            <CategoryFilter active={activeCategory} onChange={setActiveCategory} />
+          )}
         </div>
 
         <div
@@ -157,14 +177,16 @@ export function KioskLandscape({
           display: 'flex',
         }}
       >
-        <InventorySidebar
-          products={filteredProducts}
-          activeCategory={activeCategory}
-          selectedProductId={selectedProductId}
-          onSelect={setSelectedProductId}
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-        />
+        {isActive && (
+          <InventorySidebar
+            products={filteredProducts}
+            activeCategory={activeCategory}
+            selectedProductId={selectedProductId}
+            onSelect={setSelectedProductId}
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
 
         <div
           style={{
@@ -207,11 +229,16 @@ export function KioskLandscape({
               }}
             >
               <KioskCanvas
-                key={selectedProduct.id}
                 anchors={hudAnchors}
                 anchorStateRef={anchorStateRef}
                 modelUrl={selectedProduct.model3D ?? undefined}
                 orientation="landscape"
+                attract={!isActive}
+                onModelError={onModelError}
+                prefetchUrl={prefetchUrl}
+                exploded={exploded}
+                explodeConfig={selectedProduct.explode}
+                onExplodableChange={onExplodableChange}
               />
             </div>
           ) : selectedProduct ? (
@@ -222,7 +249,7 @@ export function KioskLandscape({
           ) : null}
 
           {/* HUD chips */}
-          {has3D && selectedProduct && (
+          {isActive && !qrOpen && has3D && selectedProduct && (
             <AnimatePresence>
               {hudAnchors.map((anchor) => (
                 <HudChip
@@ -242,14 +269,37 @@ export function KioskLandscape({
             </AnimatePresence>
           )}
 
-          {selectedProduct && <RightInfoPanel product={selectedProduct} />}
+          {isActive && selectedProduct && (
+            <RightInfoPanel
+              product={selectedProduct}
+              onQrOpenChange={setQrOpen}
+              explodable={explodable}
+              exploded={exploded}
+              onToggleExplode={onToggleExplode}
+            />
+          )}
         </div>
       </div>
+
+      {/* Attract: full-viewport touch-anywhere catcher + prompt */}
+      {!isActive && <AttractOverlay onActivate={onActivate} />}
     </div>
   )
 }
 
-function RightInfoPanel({ product }: { product: Product }) {
+function RightInfoPanel({
+  product,
+  onQrOpenChange,
+  explodable,
+  exploded,
+  onToggleExplode,
+}: {
+  product: Product
+  onQrOpenChange?: (open: boolean) => void
+  explodable: boolean
+  exploded: boolean
+  onToggleExplode: () => void
+}) {
   const subtitle = getSubtitle(product)
   const catLabel = getCategory(product.category).label
   const desc =
@@ -257,10 +307,13 @@ function RightInfoPanel({ product }: { product: Product }) {
     'Full specification available in the technical brief.'
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, x: 28 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.5, ease: 'easeOut', delay: 0.12 }}
       style={{
         position: 'absolute',
-        right: 32,
+        right: 100,
         bottom: 40,
         width: 460,
         maxWidth: '42%',
@@ -299,9 +352,10 @@ function RightInfoPanel({ product }: { product: Product }) {
           color: tokens.text,
           textTransform: 'uppercase',
           margin: '0 0 10px',
+          textWrap: 'balance',
         }}
       >
-        {product.name}
+        {preventOrphan(product.name)}
       </h1>
 
       <div
@@ -364,6 +418,15 @@ function RightInfoPanel({ product }: { product: Product }) {
       >
         {desc}
       </p>
-    </div>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <ExplodeButton
+          explodable={explodable}
+          exploded={exploded}
+          onToggle={onToggleExplode}
+        />
+        <ProductDetailQr product={product} onOpenChange={onQrOpenChange} />
+      </div>
+    </motion.div>
   )
 }

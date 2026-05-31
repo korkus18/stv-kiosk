@@ -2,7 +2,7 @@
   {
     "id": "bangalore-torpedo-4-x-6-ft",
     "category": "engineer",
-    "categoryLabel": "Ženijní munice",
+    "categoryLabel": "Engineer ammunition",
     "name": "Bangalore Torpedo 4 x 6 ft",
     "description": "The Bangalore Torpedo is designed to produce a continuous line charge for breaching barbed wire entanglements and for clearing the mines and other explosive devices from the surface of the terrain. Torpedoes fitted with connection pieces make up the standard charge. Each charge is filled with ammonal and with a booster fitted into each end.",
     "compatibility": null,
@@ -22,12 +22,15 @@
       "Use": "The Bangalore Torpedo can be used individually or as continuous line charge of any length. The charges are directly fitted with connection pieces and can be assembled in any order. A solid nose cone is clipped into the first charge to facilitate access through an obstacle. A detonator is fitted to the detonator well of last charge for initiation.",
       "NEQ (kg);": "211,2"
     },
-    "model3D": "/models/bangalore_torpedo_4x6ft/Bangalore_torpedo_4x6ft.gltf"
+    "model3D": "/models/bangalore_torpedo_4x6ft/Bangalore_torpedo_4x6ft.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/tahla-naloz-bangalore-torpedo-46ft"
   },
   {
     "id": "bangalore-torpedo-8-x-1-m",
     "category": "engineer",
-    "categoryLabel": "Ženijní munice",
+    "categoryLabel": "Engineer ammunition",
     "name": "Bangalore Torpedo 8 x 1 m",
     "description": "The Bangalore Torpedo is designed to produce a continuous line charge for breaching barbed wire entanglements and for clearing the mines and other explosive devices from the surface of the terrain. Torpedoes fitted with connection pieces make up the standard charge. Each charge is filled with ammonal and with a booster fitted into each end.",
     "compatibility": null,
@@ -47,12 +50,15 @@
       "Use": "The Bangalore Torpedo can be used individually or as continuous line charge of any length. The charges are directly fitted with connection pieces and can be assembled in any order. A solid nose cone is clipped into the first charge to facilitate access through an obstacle. A detonator is fitted to the detonator well of last charge for initiation.",
       "NEQ (kg);": "88"
     },
-    "model3D": "/models/bangalore_torpedo_8x1m/Bangalore_torpedo_8x1m.gltf"
+    "model3D": "/models/bangalore_torpedo_8x1m/Bangalore_torpedo_8x1m.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": null
   },
   {
     "id": "demolition-charge-hayrick",
     "category": "engineer",
-    "categoryLabel": "Ženijní munice",
+    "categoryLabel": "Engineer ammunition",
     "name": "Demolition charge HAYRICK",
     "description": "HAYRICK is a military-grade V-shaped linear cutting demolition charge designed for effective breaching of structural steel and reinforced concrete targets.",
     "compatibility": null,
@@ -71,12 +77,15 @@
       "Use": "The HAYRICK can be used either as individual charge or as necklace. Due to nails packed along with the charge, the HAYRICK can be linked as linear shaped charge depending on the desired effect and the nature of the object to be destroyed.",
       "NEQ (kg);": "440"
     },
-    "model3D": "/models/hayrick/Hayrick.gltf"
+    "model3D": "/models/hayrick/Hayrick.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/demolicni-naloz-hayrick"
   },
   {
     "id": "demolition-charge-tnt-250-g",
     "category": "engineer",
-    "categoryLabel": "Ženijní munice",
+    "categoryLabel": "Engineer ammunition",
     "name": "Demolition charge TNT 250 g",
     "description": "The 250 g TNT demolition charge is a standard military explosive designed for a wide range of demolition applications.",
     "compatibility": null,
@@ -97,12 +106,16 @@
       "Use": "For standard demolition tasks. Can be used under water.",
       "NEQ (kg);": "720"
     },
-    "model3D": null
+    "model3D": "/models/tnt_250g/TNT_250g.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/demolicni-nalozky-tnt",
+    "explode": false
   },
   {
     "id": "demolition-charge-tnt-500-g",
     "category": "engineer",
-    "categoryLabel": "Ženijní munice",
+    "categoryLabel": "Engineer ammunition",
     "name": "Demolition charge TNT 500 g",
     "description": "The 500 g TNT demolition charge is a standard military explosive designed for a wide range of demolition applications.",
     "compatibility": null,
@@ -123,12 +136,16 @@
       "Use": "For standard demolition tasks. Can be used under water.",
       "NEQ (kg);": "720"
     },
-    "model3D": null
+    "model3D": "/models/tnt_500g/TNT_500g.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/demolicni-nalozky-tnt",
+    "explode": false
   },
   {
     "id": "shaped-charge-beehive",
     "category": "engineer",
-    "categoryLabel": "Ženijní munice",
+    "categoryLabel": "Engineer ammunition",
     "name": "Shaped charge BEEHIVE",
     "description": "The BEEHIVE is a shaped charge device designed for destruction of objects, structures and create craters. In the kit, there are three legs which should be attached during the charge set up, which allows for the optimal stand-off distance and ensuring peak performance of the shaped charge.",
     "compatibility": null,
@@ -148,12 +165,40 @@
       "Use": "The BEEHIVE can be used only with attached legs to reach optimal performance of the shaped charge.",
       "NEQ (kg);": "177"
     },
-    "model3D": null
+    "model3D": "/models/beehive/Beehive.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/kumulativni-naloz-beehive",
+    "explode": {
+      "mode": "radial",
+      "partOverrides": {
+        "BEE-24-1035_STV ŠABLONACE": [
+          40,
+          0,
+          0
+        ],
+        "BEE-24-0981 #1 #1 #1": [
+          -140,
+          -61,
+          -35
+        ],
+        "BEE-24-0981 #1": [
+          -140,
+          61,
+          -35
+        ],
+        "BEE-24-0981 #1 #1": [
+          -140,
+          2,
+          70
+        ]
+      }
+    }
   },
   {
     "id": "black-dough",
     "category": "explosives",
-    "categoryLabel": "Plastické trhaviny",
+    "categoryLabel": "Plastic explosives",
     "name": "BLACK DOUGH",
     "description": "BLACK DOUGH is a PETN-based plastic explosive widely used for specialized military and police demolition tasks as well as for industrial blasting applications.",
     "compatibility": null,
@@ -179,12 +224,36 @@
       "Use": "BLACK DOUGH has excellent mouldability and adhesive properties even in the hardest environmental and temperature conditions and can be used for underwater blast operations.",
       "NEQ (kg);": "540"
     },
-    "model3D": null
+    "model3D": "/models/black_dough/Black_dough.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/plasticka-trhavina-black-dough",
+    "explode": {
+      "mode": "axial",
+      "axisOverride": "z",
+      "partOverrides": {
+        "MAT00029103_VýchozíSM-FLAT-PATTERN": [
+          0,
+          0,
+          0
+        ],
+        "BPD-24-1071": [
+          0,
+          0,
+          140
+        ],
+        "S4-BPD-0922": [
+          0,
+          0,
+          170
+        ]
+      }
+    }
   },
   {
     "id": "mortar-round-120-mm-he",
     "category": "mortar",
-    "categoryLabel": "Minometová munice",
+    "categoryLabel": "Mortar ammunition",
     "name": "Mortar round 120 mm HE",
     "description": "The 120 mm mortar round is intended for firing stationary unprotected targets, troop concentrations, transport convoys, gun nests.",
     "compatibility": "For mortars 120mm – 2B11, M38, M43, M82, M85",
@@ -207,12 +276,15 @@
       "Operating Temperature": "-30 °C to +50 °C",
       "NEQ (kg)": "64,5"
     },
-    "model3D": null
+    "model3D": "/models/mortar_120mm_he/Mina_120_HE.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": null
   },
   {
     "id": "projectile-155-mm-he-m107",
     "category": "artillery",
-    "categoryLabel": "Dělostřelecká munice",
+    "categoryLabel": "Artillery ammunition",
     "name": "Projectile 155 mm HE M107",
     "description": "The projectile consists of steel shell body filled with TNT. A threaded lifting plug closes the fuze cavity at the nose of the projectile for handling and storage. Point detonating, proximity or multi-option fuzes may be used with this projectile.",
     "compatibility": "155 mm howitzers",
@@ -229,12 +301,15 @@
       "Operating Temperature": "-46 °C to +63 °C",
       "Use": "The projectile 155mm HE M107 is used as a part of complete round 155mm HE M107 which consists of projectile with fuze, propelling charge and primer. The round 155mm HE M107 is fired from 155mm howitzers and is used for blast effect and fragmentation."
     },
-    "model3D": null
+    "model3D": "/models/projectile_155mm_he_m107/155_mm_HE_M107.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/naboj-155-mm-tristivo-trhavy"
   },
   {
     "id": "propelling-charge-m4a2-charge-7",
     "category": "artillery",
-    "categoryLabel": "Dělostřelecká munice",
+    "categoryLabel": "Artillery ammunition",
     "name": "Propelling charge M4A2-CHARGE 7",
     "description": "M4A2-Charge 7 is propelling charge designed to be used primarily with 155 mm M107 projectiles for firing in zone 7. The propelling charge contains tubular powder NDT-3 type or equivalent and is equipped with Igniter and Flash reducer.",
     "compatibility": "155 mm howitzers",
@@ -257,12 +332,15 @@
       "NW (kg)": "~170",
       "NEQ (kg)": "~167"
     },
-    "model3D": null
+    "model3D": null,
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/hnaci-napln-m4a2"
   },
   {
     "id": "rocket-122-mm-he-grad",
     "category": "artillery",
-    "categoryLabel": "Dělostřelecká munice",
+    "categoryLabel": "Artillery ammunition",
     "name": "Rocket 122 mm HE GRAD",
     "description": "Rocket 122 mm HE GRAD is intended for fire support against fortified, light armoured or non-armoured targets. It is designed to incapacitate enemy troops and to neutralize enemy command posts and communication centres.",
     "compatibility": "BM-21 and RM-70 multiple-launch rocket systems.",
@@ -285,12 +363,15 @@
       "Fuze": "MRV-U or equivalent AU-32",
       "NEQ (kg)": "427,2"
     },
-    "model3D": null
+    "model3D": "/models/rocket_122mm_he_grad/122_GRAD.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/raketa-122-mm-grad"
   },
   {
     "id": "round-152-mm-he-with-full-charge",
     "category": "artillery",
-    "categoryLabel": "Dělostřelecká munice",
+    "categoryLabel": "Artillery ammunition",
     "name": "Round 152 mm HE with full charge",
     "description": "Round is intended to be fired from 152 mm howitzers for destroying enemy manpower in the open or in the field-type shelters, fighting artillery and destroying light armoured vehicles and equipment, also intended for making passages in mine fields and defence wirings",
     "compatibility": "Howitzer 152 mm D-20",
@@ -316,12 +397,15 @@
       "Propellant weight (kg)": "~8,1",
       "Primer screw": "KV-4; KW-13; KV-13U"
     },
-    "model3D": null
+    "model3D": "/models/round_152mm_he_full/152_full.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/152-mm"
   },
   {
     "id": "round-122-mm-he-with-full-charge",
     "category": "artillery",
-    "categoryLabel": "Dělostřelecká munice",
+    "categoryLabel": "Artillery ammunition",
     "name": "Round 122 mm HE with full charge",
     "description": "Round 122 mm HE with full charge is intended to be fired from 122 mm D-30 and 2S1 howitzers for destroying enemy manpower in the open or in the field-type shelters, also intended for making passages in mine fields and defense wirings, fightning artillery and destroying light armoured vehicles and equipment.",
     "compatibility": "Howitzers 122 mm D-30 and 2S1",
@@ -348,12 +432,15 @@
       "Primer screw": "KV-4; KW-13; KV-13U",
       "NEQ (kg)": "~146"
     },
-    "model3D": null
+    "model3D": "/models/round_122mm_he_full/122_mm_HE.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/naboj-122-mm-he-pro-kanon-d-30-nebo-samohybnou-houfnici-2s1-gvozdika"
   },
   {
     "id": "round-pg-7vm",
     "category": "rocket",
-    "categoryLabel": "Raketová munice",
+    "categoryLabel": "Rocket ammunition",
     "name": "Round PG-7VM",
     "description": "Round PG-7VM is designed for destroying armoured vehicles by piercing the armour by HEAT effect. The round can be also used to destroy enemy mechanized troops, and manpower in field-type and urban-type shelters.",
     "compatibility": null,
@@ -396,12 +483,15 @@
       "Ignition charge powder weight (g)": "9,3±0,1",
       "NEQ (kg)": "57"
     },
-    "model3D": null
+    "model3D": "/models/pg_7vm/PG_7VM.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
   },
   {
     "id": "round-pg-7vm-practice-t",
     "category": "rocket",
-    "categoryLabel": "Raketová munice",
+    "categoryLabel": "Rocket ammunition",
     "name": "Round PG-7VM PRACTICE-T",
     "description": "Round PG-7VM PRACTICE-T has the same weight and dimension parameters as PG-7VM round. It is used for cost-effective training of own units with RPG-7 type of launchers.",
     "compatibility": null,
@@ -439,12 +529,15 @@
       "Ignition charge powder weight (g)": "9,3±0,1",
       "NEQ (kg)": "27"
     },
-    "model3D": null
+    "model3D": "/models/pg_7vm_practice_t/PG-7VM-PRACTICE-T.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
   },
   {
     "id": "round-tb-7vm",
     "category": "rocket",
-    "categoryLabel": "Raketová munice",
+    "categoryLabel": "Rocket ammunition",
     "name": "Round TB-7VM",
     "description": "Round TB-7VM is designed for destroying enemy manpower, observation posts and lightly armoured and unarmoured equipment, which are affected mainly by the overpressure created by detonation of thermobaric explosive.",
     "compatibility": null,
@@ -485,14 +578,17 @@
       "NEQ (kg)": "5,5",
       "NEQ (kg);": "82,5"
     },
-    "model3D": null
+    "model3D": "/models/tb_7vm/TB_7VM.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
   },
   {
     "id": "scorpio-223-rem-fmj-356g",
     "category": "smallcal",
-    "categoryLabel": "Malorážná munice",
+    "categoryLabel": "Small caliber ammunition",
     "name": "SCORPIO .223 Rem FMJ 3,56 g",
-    "description": "Puškové střelivo ráže .223 Remington pro profesionální nasazení a výcvik.",
+    "description": "Rifle ammunition in .223 Remington calibre for professional deployment and training.",
     "compatibility": null,
     "natoStockNumber": null,
     "specs": {
@@ -502,14 +598,17 @@
       "Certification": "CIP",
       "Application": "Training, law enforcement"
     },
-    "model3D": null
+    "model3D": "/models/scorpio_223_rem/223_Rem.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/scorpio-223-rem-55gr-fmj-cz"
   },
   {
     "id": "scorpio-308-win-fmj-950g",
     "category": "smallcal",
-    "categoryLabel": "Malorážná munice",
+    "categoryLabel": "Small caliber ammunition",
     "name": "SCORPIO .308 Win FMJ 9,50 g",
-    "description": "Puškové střelivo ráže .308 Winchester pro profesionální nasazení.",
+    "description": "Rifle ammunition in .308 Winchester calibre for professional deployment.",
     "compatibility": null,
     "natoStockNumber": null,
     "specs": {
@@ -519,14 +618,17 @@
       "Certification": "CIP",
       "Application": "Military, sniper training"
     },
-    "model3D": null
+    "model3D": "/models/scorpio_308_win/308_Win.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/scorpio-308-win-cz"
   },
   {
     "id": "scorpio-556x45-m193-nato",
     "category": "smallcal",
-    "categoryLabel": "Malorážná munice",
+    "categoryLabel": "Small caliber ammunition",
     "name": "SCORPIO 5,56 × 45 mm M193 NATO",
-    "description": "Puškové střelivo ráže 5,56 × 45 mm v NATO M193 specifikaci, 4 g.",
+    "description": "Rifle ammunition in 5.56 × 45 mm calibre to NATO M193 specification, 4 g.",
     "compatibility": null,
     "natoStockNumber": null,
     "specs": {
@@ -536,14 +638,17 @@
       "Certification": "NATO STANAG",
       "Application": "Military"
     },
-    "model3D": null
+    "model3D": null,
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/scorpio-556x45-mm-cz"
   },
   {
     "id": "scorpio-762x39-fmj-8g",
     "category": "smallcal",
-    "categoryLabel": "Malorážná munice",
+    "categoryLabel": "Small caliber ammunition",
     "name": "SCORPIO 7,62 × 39 mm FMJ 8 g",
-    "description": "Puškové střelivo ráže 7,62 × 39 mm pro profesionální nasazení s plně plášťovanou střelou 8 g.",
+    "description": "Rifle ammunition in 7.62 × 39 mm calibre for professional deployment, with a full metal jacket bullet, 8 g.",
     "compatibility": null,
     "natoStockNumber": null,
     "specs": {
@@ -553,14 +658,17 @@
       "Certification": "CIP",
       "Application": "Military, law enforcement"
     },
-    "model3D": null
+    "model3D": "/models/scorpio_762x39/STVT-Scorpio-7_62x39.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/scorpio-762x39-123gr-fmj"
   },
   {
     "id": "scorpio-9mm-luger-fmj-75g",
     "category": "smallcal",
-    "categoryLabel": "Malorážná munice",
+    "categoryLabel": "Small caliber ammunition",
     "name": "SCORPIO 9 mm Luger FMJ 7,5 g",
-    "description": "Pistolové střelivo ráže 9 × 19 mm pro profesionální použití v ozbrojených složkách. Plně plášťovaná střela 7,5 g, vyrobeno dle civilních standardů CIP.",
+    "description": "Pistol ammunition in 9 × 19 mm calibre for professional use by armed forces. Full metal jacket bullet, 7.5 g, manufactured to civilian CIP standards.",
     "compatibility": null,
     "natoStockNumber": null,
     "specs": {
@@ -570,14 +678,17 @@
       "Certification": "CIP",
       "Application": "Law enforcement, training"
     },
-    "model3D": null
+    "model3D": "/models/scorpio_9mm_luger_fmj_75g/Flyer_Scorpio_9mm_Luger_FMJ_75g.gltf",
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/scorpio-9-mm-luger-cz"
   },
   {
     "id": "scorpio-9mm-luger-tfmj-8g",
     "category": "smallcal",
-    "categoryLabel": "Malorážná munice",
+    "categoryLabel": "Small caliber ammunition",
     "name": "SCORPIO 9 mm Luger TFMJ 8 g",
-    "description": "Pistolové střelivo ráže 9 × 19 mm s plně plášťovanou střelou 8 g TFMJ pro profesionální použití.",
+    "description": "Pistol ammunition in 9 × 19 mm calibre with a full metal jacket 8 g TFMJ bullet, for professional use.",
     "compatibility": null,
     "natoStockNumber": null,
     "specs": {
@@ -587,14 +698,17 @@
       "Certification": "CIP",
       "Application": "Law enforcement"
     },
-    "model3D": null
+    "model3D": null,
+    "visible": true,
+    "featured": false,
+    "webUrl": null
   },
   {
     "id": "scorpio-9x19-fmj-8g-nato",
     "category": "smallcal",
-    "categoryLabel": "Malorážná munice",
+    "categoryLabel": "Small caliber ammunition",
     "name": "SCORPIO 9 × 19 mm FMJ 8 g NATO",
-    "description": "Pistolové střelivo ráže 9 × 19 mm v NATO specifikaci. Plně plášťovaná střela 8 g.",
+    "description": "Pistol ammunition in 9 × 19 mm calibre to NATO specification. Full metal jacket bullet, 8 g.",
     "compatibility": null,
     "natoStockNumber": null,
     "specs": {
@@ -604,6 +718,9 @@
       "Certification": "NATO STANAG",
       "Application": "Military"
     },
-    "model3D": null
+    "model3D": null,
+    "visible": true,
+    "featured": false,
+    "webUrl": "https://www.stvgroup.cz/produkt/scorpio-9-mm-nato-cz"
   }
 ]

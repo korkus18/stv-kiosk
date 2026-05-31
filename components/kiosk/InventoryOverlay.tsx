@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { PRODUCTS, getProductsByCategory, type Product } from '@/data/products'
+import { getProductsByCategory, type Product } from '@/data/products'
 import { CATEGORIES } from '@/data/categories'
 import type { CategoryId } from '@/data/categories'
 import { CategoryFilter } from './CategoryFilter'
@@ -117,7 +117,7 @@ export function InventoryOverlay({
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {showGrouping
           ? CATEGORIES.map((cat) => {
-              const items = PRODUCTS.filter((p) => p.category === cat.id)
+              const items = getProductsByCategory(cat.id)
               if (items.length === 0) return null
               return (
                 <div key={cat.id}>

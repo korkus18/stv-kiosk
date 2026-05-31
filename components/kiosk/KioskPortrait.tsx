@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import StvLion from '@/components/icons/StvLion'
 import STVLogo from '@/components/ui/STVLogo'
+import { AttractOverlay } from './AttractOverlay'
+import { ProductDetailQr } from './ProductDetailQr'
+import { ExplodeButton } from './ExplodeButton'
 import { EmptyModelPlaceholder } from './EmptyModelPlaceholder'
 import { CategoryFilter } from './CategoryFilter'
 import { HudChip, type AnchorState } from './HudChip'
@@ -22,6 +25,7 @@ import {
   formatDescription,
   getSubtitle,
   pickChipValues,
+  preventOrphan,
   type KioskSharedProps,
 } from './utils'
 
@@ -34,6 +38,13 @@ const KioskCanvas = dynamic(
   },
 )
 
+/** Portrait-only HUD offsets: shove the two top chips to opposite sides so
+ *  they land in the top corners (clamped) instead of overlapping mid-top. */
+const PORTRAIT_CHIP_OFFSETS: Record<string, { x: number; y: number }> = {
+  designation: { x: 320, y: -8 },
+  type: { x: -320, y: -8 },
+}
+
 export function KioskPortrait({
   activeCategory,
   setActiveCategory,
@@ -41,8 +52,22 @@ export function KioskPortrait({
   setSelectedProductId,
   selectedProduct,
   filteredProducts,
+  mode,
+  onActivate,
+  onModelError,
+  prefetchUrl,
+  exploded,
+  explodable,
+  onToggleExplode,
+  onExplodableChange,
 }: KioskSharedProps) {
   const [inventoryOpen, setInventoryOpen] = useState(false)
+  // Attract shows ONLY the model (+ touch prompt); active reveals the full
+  // informed UI. Data chrome below is gated on this.
+  const isActive = mode === 'active'
+  // HUD chips are DOM-positioned — hide them while the QR modal is open
+  // (z-index alone can't put the modal above their paint layer).
+  const [qrOpen, setQrOpen] = useState(false)
 
   const currentIndex = useMemo(
     () => filteredProducts.findIndex((p) => p.id === selectedProductId),
@@ -62,7 +87,10 @@ export function KioskPortrait({
     setSelectedProductId(filteredProducts[next].id)
   }
 
-  // HUD chip state — same recipe as landscape
+  // HUD chip state. In the narrow portrait viewport the two TOP chips
+  // (DESIGNATION right, TYPE left) project too close to the centre and overlap,
+  // so we push them hard to opposite sides — HudChip's edge-clamp then seats
+  // them in the top corners (like landscape), fully visible and non-overlapping.
   const chipValues = selectedProduct ? pickChipValues(selectedProduct) : []
   const hudAnchors: HudAnchor[] = HUD_ANCHOR_POSITIONS.map((anchor, i) => ({
     id: anchor.id,
@@ -71,7 +99,7 @@ export function KioskPortrait({
     value: chipValues[i]?.value ?? '',
     align: anchor.align,
     delay: anchor.delay,
-    chipOffset: anchor.chipOffset,
+    chipOffset: PORTRAIT_CHIP_OFFSETS[anchor.id] ?? anchor.chipOffset,
   }))
 
   const anchorStateRef = useRef<Record<string, AnchorState>>({
@@ -103,14 +131,17 @@ export function KioskPortrait({
         userSelect: 'none',
       }}
     >
-      {/* ── Lion watermark — viewport-anchored ──────────────────────── */}
+      {/* ── Lion watermark — top-left, bleeds off top + left edges ──────
+          Portrait-only placement (landscape keeps its own right-edge style).
+          Same un-flipped asset & colour; only repositioned + cropped by the
+          viewport edges so the lion stays partial, never whole. Sits at
+          zIndex 0 behind all UI (top bar / filter strip / HUD chips). */}
       <div
         aria-hidden
         style={{
           position: 'fixed',
-          top: '50%',
-          right: '-70vw',
-          transform: 'translateY(-50%)',
+          top: '-26vw',
+          left: '-32vw',
           height: '100vw',
           width: '100vw',
           opacity: 0.07,
@@ -144,22 +175,24 @@ export function KioskPortrait({
       </div>
 
       {/* ── FILTER STRIP ─────────────────────────────────────────────── */}
-      <div
-        style={{
-          padding: '20px 32px',
-          background: tokens.bgCard,
-          borderBottom: `1px solid ${tokens.border}`,
-          zIndex: 4,
-          flexShrink: 0,
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <CategoryFilter
-          active={activeCategory}
-          onChange={setActiveCategory}
-        />
-      </div>
+      {isActive && (
+        <div
+          style={{
+            padding: '20px 32px',
+            background: tokens.bgCard,
+            borderBottom: `1px solid ${tokens.border}`,
+            zIndex: 4,
+            flexShrink: 0,
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <CategoryFilter
+            active={activeCategory}
+            onChange={setActiveCategory}
+          />
+        </div>
+      )}
 
       {/* ── HERO 3D AREA ────────────────────────────────────────────── */}
       <div
@@ -174,7 +207,7 @@ export function KioskPortrait({
         }}
       >
         {/* Left arrow */}
-        <NavArrow direction="left" onClick={goPrev} />
+        {isActive && <NavArrow direction="left" onClick={goPrev} />}
 
         {/* 3D canvas or placeholder */}
         {selectedProduct && has3D ? (
@@ -186,11 +219,16 @@ export function KioskPortrait({
             }}
           >
             <KioskCanvas
-              key={selectedProduct.id}
               anchors={hudAnchors}
               anchorStateRef={anchorStateRef}
               modelUrl={selectedProduct.model3D ?? undefined}
               orientation="portrait"
+              attract={!isActive}
+              onModelError={onModelError}
+              prefetchUrl={prefetchUrl}
+              exploded={exploded}
+              explodeConfig={selectedProduct.explode}
+              onExplodableChange={onExplodableChange}
             />
           </div>
         ) : selectedProduct ? (
@@ -201,7 +239,7 @@ export function KioskPortrait({
         ) : null}
 
         {/* HUD chips */}
-        {has3D && selectedProduct && (
+        {isActive && !qrOpen && has3D && selectedProduct && (
           <AnimatePresence>
             {hudAnchors.map((anchor) => (
               <HudChip
@@ -224,9 +262,10 @@ export function KioskPortrait({
         )}
 
         {/* Right arrow */}
-        <NavArrow direction="right" onClick={goNext} />
+        {isActive && <NavArrow direction="right" onClick={goNext} />}
 
         {/* Position indicator */}
+        {isActive && (
         <div
           style={{
             position: 'absolute',
@@ -256,22 +295,37 @@ export function KioskPortrait({
             }
           </span>
         </div>
+        )}
       </div>
 
       {/* ── INFO PANEL ──────────────────────────────────────────────── */}
-      <div
-        style={{
-          padding: '40px 48px 32px',
-          background: tokens.bg,
-          position: 'relative',
-          zIndex: 2,
-          flexShrink: 0,
-        }}
-      >
-        {selectedProduct && <PortraitInfoPanel product={selectedProduct} />}
-      </div>
+      {isActive && (
+        <motion.div
+          initial={{ opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut', delay: 0.12 }}
+          style={{
+            padding: '40px 48px 32px',
+            background: tokens.bg,
+            position: 'relative',
+            zIndex: 2,
+            flexShrink: 0,
+          }}
+        >
+          {selectedProduct && (
+            <PortraitInfoPanel
+              product={selectedProduct}
+              onQrOpenChange={setQrOpen}
+              explodable={explodable}
+              exploded={exploded}
+              onToggleExplode={onToggleExplode}
+            />
+          )}
+        </motion.div>
+      )}
 
       {/* ── PULL-UP TAB ─────────────────────────────────────────────── */}
+      {isActive && (
       <button
         onClick={() => setInventoryOpen(true)}
         style={{
@@ -309,10 +363,11 @@ export function KioskPortrait({
           {PRODUCTS.length} products
         </span>
       </button>
+      )}
 
       {/* ── INVENTORY OVERLAY ───────────────────────────────────────── */}
       <AnimatePresence>
-        {inventoryOpen && (
+        {isActive && inventoryOpen && (
           <InventoryOverlay
             activeCategory={activeCategory}
             setActiveCategory={setActiveCategory}
@@ -325,6 +380,9 @@ export function KioskPortrait({
           />
         )}
       </AnimatePresence>
+
+      {/* Attract: full-viewport touch-anywhere catcher + prompt */}
+      {!isActive && <AttractOverlay onActivate={onActivate} />}
     </div>
   )
 }
@@ -397,7 +455,19 @@ function ChevronUp() {
   )
 }
 
-function PortraitInfoPanel({ product }: { product: Product }) {
+function PortraitInfoPanel({
+  product,
+  onQrOpenChange,
+  explodable,
+  exploded,
+  onToggleExplode,
+}: {
+  product: Product
+  onQrOpenChange?: (open: boolean) => void
+  explodable: boolean
+  exploded: boolean
+  onToggleExplode: () => void
+}) {
   const subtitle = getSubtitle(product)
   const categoryLabel = getCategory(product.category).label.toUpperCase()
   const desc =
@@ -442,9 +512,10 @@ function PortraitInfoPanel({ product }: { product: Product }) {
           textTransform: 'uppercase',
           margin: '0 0 14px',
           maxWidth: '95%',
+          textWrap: 'balance',
         }}
       >
-        {product.name}
+        {preventOrphan(product.name)}
       </h1>
 
       {/* Subtitle */}
@@ -510,6 +581,15 @@ function PortraitInfoPanel({ product }: { product: Product }) {
       >
         {desc}
       </p>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <ExplodeButton
+          explodable={explodable}
+          exploded={exploded}
+          onToggle={onToggleExplode}
+        />
+        <ProductDetailQr product={product} onOpenChange={onQrOpenChange} />
+      </div>
     </>
   )
 }
