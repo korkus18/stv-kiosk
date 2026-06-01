@@ -16,6 +16,11 @@ type Props = {
   label: string
   value: string
   align?: 'left' | 'right'
+  /** Portrait: pin this chip's X to a container edge (left/right) and let only
+   *  its Y track the projected cube corner. Used for the two top chips in the
+   *  narrow portrait viewport, where they'd otherwise overlap / drift mid-screen
+   *  on compact models. Unset (landscape) → normal corner-tracking + edge-clamp. */
+  pinX?: 'left' | 'right'
   delay?: number
   chipOffset: { x: number; y: number }
   anchorStateRef: React.MutableRefObject<Record<string, AnchorState>>
@@ -29,6 +34,7 @@ export function HudChip({
   label,
   value,
   align = 'left',
+  pinX,
   delay = 0,
   chipOffset,
   anchorStateRef,
@@ -58,20 +64,35 @@ export function HudChip({
         let targetX = state.x + chipOffset.x
         let targetY = state.y + chipOffset.y
 
-        // Clamp so the whole chip — incl. its leader/bracket — stays on-screen
-        // with padding. Chip is centred on (targetX,targetY) via translate(-50%).
         const w = el.offsetWidth
         const h = el.offsetHeight
-        const vw = window.innerWidth
-        const vh = window.innerHeight
         const leftExt = w / 2 + (align === 'left' ? LEADER : 0)
         const rightExt = w / 2 + (align === 'right' ? LEADER : 0)
-        const minX = PAD + leftExt
-        const maxX = vw - PAD - rightExt
-        if (minX <= maxX) targetX = Math.min(Math.max(targetX, minX), maxX)
-        const minY = PAD + h / 2 + BRACKET
-        const maxY = vh - PAD - h / 2
-        if (minY <= maxY) targetY = Math.min(Math.max(targetY, minY), maxY)
+
+        if (pinX) {
+          // Portrait top chips: pin X to the CONTAINER edge (so they always sit
+          // in the corners, spread apart, regardless of how the compact model
+          // projects), and let Y track the cube corner — clamped to the hero
+          // area, not the window (the hero is much shorter than the viewport).
+          const parent = el.offsetParent as HTMLElement | null
+          const cw = parent?.clientWidth ?? window.innerWidth
+          const ch = parent?.clientHeight ?? window.innerHeight
+          targetX = pinX === 'right' ? cw - PAD - rightExt : PAD + leftExt
+          const minY = PAD + h / 2 + BRACKET
+          const maxY = ch - PAD - h / 2
+          if (minY <= maxY) targetY = Math.min(Math.max(targetY, minY), maxY)
+        } else {
+          // Clamp so the whole chip — incl. its leader/bracket — stays on-screen
+          // with padding. Chip is centred on (targetX,targetY) via translate(-50%).
+          const vw = window.innerWidth
+          const vh = window.innerHeight
+          const minX = PAD + leftExt
+          const maxX = vw - PAD - rightExt
+          if (minX <= maxX) targetX = Math.min(Math.max(targetX, minX), maxX)
+          const minY = PAD + h / 2 + BRACKET
+          const maxY = vh - PAD - h / 2
+          if (minY <= maxY) targetY = Math.min(Math.max(targetY, minY), maxY)
+        }
 
         el.style.transform = `translate(${targetX}px, ${targetY}px) translate(-50%, -50%)`
 
@@ -85,7 +106,7 @@ export function HudChip({
     }
     tick()
     return () => cancelAnimationFrame(raf)
-  }, [id, mounted, isFocused, isMuted, anchorStateRef, chipOffset.x, chipOffset.y, align])
+  }, [id, mounted, isFocused, isMuted, anchorStateRef, chipOffset.x, chipOffset.y, align, pinX])
 
   return (
     <motion.div
