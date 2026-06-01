@@ -27,8 +27,11 @@ type Props = {
   cubeStateRef: React.MutableRefObject<Record<string, CubeState>>
 }
 
-/** Cube-edge wireframe opacity (constant — it's the structural frame). */
-const EDGE_OPACITY = 0.3
+/** Cube-edge wireframe opacity at FULL facing (front edges). Edges fade with
+ *  the same back-face strength as the leaders, so the box never reads as a hard,
+ *  closed wireframe — only the edges turned toward the camera show, and they
+ *  dissolve as the model rotates them to the back. */
+const EDGE_OPACITY = 0.42
 /** Leader line opacity at full strength (fades with back-face occlusion). */
 const LEADER_OPACITY = 0.5
 const HIDE_BELOW = 0.04
@@ -58,7 +61,9 @@ export function HudCube({ ids, cubeStateRef }: Props) {
         const st = cubeStateRef.current[id]
         if (!slot || !slot.g || !st) continue
 
-        // Cube-edge stubs (constant opacity).
+        // Cube-edge stubs — fade with the corner's facing strength so the box
+        // softly dissolves to the back as the model rotates.
+        const eop = st.strength * EDGE_OPACITY
         for (let k = 0; k < 3; k++) {
           const line = slot.stubs[k]
           const p = st.stubs[k]
@@ -67,6 +72,7 @@ export function HudCube({ ids, cubeStateRef }: Props) {
           line.setAttribute('y1', String(st.cy))
           line.setAttribute('x2', String(p.x))
           line.setAttribute('y2', String(p.y))
+          line.style.opacity = eop < HIDE_BELOW ? '0' : String(eop)
         }
 
         // Leader line + pin marker (opacity follows occlusion strength).
@@ -112,7 +118,7 @@ export function HudCube({ ids, cubeStateRef }: Props) {
               ensure().g = el
             }}
           >
-            {/* Cube-edge stubs */}
+            {/* Cube-edge stubs — opacity driven per-frame (facing fade) */}
             {[0, 1, 2].map((k) => (
               <line
                 key={k}
@@ -120,8 +126,9 @@ export function HudCube({ ids, cubeStateRef }: Props) {
                   ensure().stubs[k] = el
                 }}
                 stroke={tokens.blue}
-                strokeWidth={1}
-                opacity={EDGE_OPACITY}
+                strokeWidth={0.9}
+                strokeLinecap="round"
+                style={{ opacity: 0, transition: 'opacity 160ms linear' }}
               />
             ))}
             {/* Leader to the model surface */}

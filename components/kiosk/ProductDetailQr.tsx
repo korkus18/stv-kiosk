@@ -101,8 +101,8 @@ export function ProductDetailQr({
                 background: tokens.bgCard,
                 border: `1px solid ${tokens.border}`,
                 boxShadow: '0 24px 80px rgba(0, 0, 0, 0.28)',
-                padding: '40px 44px 36px',
-                maxWidth: 420,
+                padding: '48px 52px 44px',
+                maxWidth: 480,
                 width: '100%',
                 display: 'flex',
                 flexDirection: 'column',
@@ -115,20 +115,23 @@ export function ProductDetailQr({
                 aria-label="Close"
                 style={{
                   position: 'absolute',
-                  top: 14,
-                  right: 14,
-                  width: 36,
-                  height: 36,
+                  top: -18,
+                  right: -18,
+                  width: 44,
+                  height: 44,
+                  borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'transparent',
-                  border: 'none',
+                  background: tokens.blue,
+                  border: '3px solid #ffffff',
                   cursor: 'pointer',
-                  color: tokens.textMuted,
+                  color: tokens.textOnBlue,
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.22)',
+                  padding: 0,
                 }}
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
                   <line x1="6" y1="6" x2="18" y2="18" />
                   <line x1="18" y1="6" x2="6" y2="18" />
                 </svg>
@@ -136,7 +139,7 @@ export function ProductDetailQr({
 
               <div
                 style={{
-                  padding: 16,
+                  padding: 20,
                   background: '#ffffff',
                   border: `1px solid ${tokens.border}`,
                   lineHeight: 0,
@@ -144,7 +147,7 @@ export function ProductDetailQr({
               >
                 <QRCodeSVG
                   value={qrValue}
-                  size={232}
+                  size={300}
                   level="M"
                   marginSize={0}
                   fgColor="#0a0a0a"

@@ -512,6 +512,11 @@ const EDGE_FRAC = 0.32
 const PIN_FADE_BAND = 0.5
 /** Per-frame smoothing of leader strength so occlusion fades, never snaps. */
 const PIN_DAMP = 0.18
+/** How much the imaginary cube grows at full explode (fraction of its size), so
+ *  it keeps wrapping the model as the parts spread out. Derived from the model
+ *  group's live scale (explode shrinks the group to EXPLODE_FIT_SCALE), so the
+ *  cube counter-scales AND grows on top — no extra explode plumbing needed. */
+const EXPLODE_CUBE_GROW = 0.6
 
 interface AnchorProjectorProps {
   anchors: HudAnchor[]
@@ -550,11 +555,23 @@ function AnchorProjector({
     const sx = (v: THREE.Vector3) => (v.x * 0.5 + 0.5) * size.width
     const sy = (v: THREE.Vector3) => (-v.y * 0.5 + 0.5) * size.height
 
+    // Explode grow: the group scale shrinks 1 → EXPLODE_FIT_SCALE as the model
+    // explodes, so recover the explode progress from it and scale the cube up by
+    // (1 + GROW·progress) in WORLD terms (the / S cancels the group's shrink, so
+    // the matrixWorld below lands the cube at anchorPos·(1 + GROW·progress)).
+    const S = mScale.x || 1
+    const explodeG = THREE.MathUtils.clamp(
+      (1 - S) / (1 - EXPLODE_FIT_SCALE),
+      0,
+      1,
+    )
+    const cubeScale = (1 + EXPLODE_CUBE_GROW * explodeG) / S
+
     for (const anchor of anchors) {
       const id = anchor.id
 
       // Chip corner.
-      corner.copy(anchor.anchorPos).applyMatrix4(g.matrixWorld).project(camera)
+      corner.copy(anchor.anchorPos).multiplyScalar(cubeScale).applyMatrix4(g.matrixWorld).project(camera)
       const cx = sx(corner)
       const cy = sy(corner)
       anchorStateRef.current[id] = { x: cx, y: cy, visible: corner.z < 1, z: corner.z }
@@ -564,13 +581,13 @@ function AnchorProjector({
       for (let a = 0; a < 3; a++) {
         tmp.copy(anchor.anchorPos)
         tmp.setComponent(a, tmp.getComponent(a) * (1 - 2 * EDGE_FRAC))
-        tmp.applyMatrix4(g.matrixWorld).project(camera)
+        tmp.multiplyScalar(cubeScale).applyMatrix4(g.matrixWorld).project(camera)
         stubs.push({ x: sx(tmp), y: sy(tmp) })
       }
 
       // Leader pin on the model surface + back-face occlusion.
       normalW.copy(anchor.anchorPos).normalize()
-      pinWorld.copy(normalW).multiplyScalar(PIN_RADIUS).applyMatrix4(g.matrixWorld)
+      pinWorld.copy(normalW).multiplyScalar(PIN_RADIUS * cubeScale).applyMatrix4(g.matrixWorld)
       normalW.applyQuaternion(mQuat)
       viewDir.copy(pinWorld).sub(camera.position).normalize()
       const facing = normalW.dot(viewDir)
