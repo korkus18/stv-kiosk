@@ -11,6 +11,7 @@ import type { ExplodeConfig } from '@/data/products'
 export type ExplodePart = {
   obj: THREE.Object3D
   rest: THREE.Vector3 // assembled local position
+  center: THREE.Vector3 // assembled geometry centre (parent-local) — for part labels
   offset: THREE.Vector3 // local translation when fully exploded
   stagger: number // 0 = moves first (inner), →STAGGER_MAX = last (outer)
 }
@@ -106,6 +107,7 @@ export function prepareExplode(
     return {
       obj,
       rest: obj.position.clone(),
+      center: center.clone(),
       offset,
       stagger: (center.distanceTo(modelCenter) / maxDist) * STAGGER_MAX,
     }
