@@ -49,6 +49,9 @@ export function KioskLandscape({
   onActivate,
   onModelError,
   prefetchUrl,
+  attractExplode,
+  onAttractAdvance,
+  modelRotation,
   exploded,
   explodable,
   onToggleExplode,
@@ -240,6 +243,9 @@ export function KioskLandscape({
                 attract={!isActive}
                 onModelError={onModelError}
                 prefetchUrl={prefetchUrl}
+                attractExplode={attractExplode}
+                onAttractAdvance={onAttractAdvance}
+                modelRotation={selectedProduct.modelRotation}
                 exploded={exploded}
                 explodeConfig={selectedProduct.explode}
                 onExplodableChange={onExplodableChange}

@@ -36,6 +36,22 @@ export type Product = {
   webUrl?: string | null
   /** Exploded view: absent = auto if model has ≥2 parts; false = force-off. */
   explode?: ExplodeField
+  /**
+   * Default model orientation — Euler angles in DEGREES `[x, y, z]`, applied as
+   * the model's rest pose (the slow auto-rotate then spins on top of it). Fixes
+   * CAD→glTF exports that come in lying down / facing the wrong way / text on the
+   * far side. Absent = automatic (long objects get a presentation tilt; others
+   * upright). Dial values in with the dev calibrator (press `c` in active mode).
+   */
+  modelRotation?: [number, number, number]
+  /**
+   * Attract-loop flourish gate (default TRUE — enabled for all models). When the
+   * model is explodable, the idle attract loop plays a slow explode → hold →
+   * reassemble on it before crossfading on; non-explodable (or force-off
+   * `explode: false`) models gracefully just rotate. Set `attractExplode: false`
+   * to opt a specific model OUT (e.g. one that explodes into a mess).
+   */
+  attractExplode?: boolean
 }
 
 export const PRODUCTS: Product[] = productsJson as unknown as Product[]

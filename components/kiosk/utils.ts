@@ -18,6 +18,13 @@ export type KioskSharedProps = {
   onModelError: (url: string) => void
   /** Next attract model to prefetch (undefined in active). */
   prefetchUrl?: string
+  /** Gate: play the slow explode→hold→reassemble flourish on this model in the
+   *  attract loop (only if it's also explodable). Default true (all models). */
+  attractExplode?: boolean
+  /** Canvas → loop: current model's attract sequence finished; advance to next. */
+  onAttractAdvance?: () => void
+  /** Default model orientation (Euler degrees [x,y,z]) — rest pose for the spin. */
+  modelRotation?: [number, number, number]
   /** Exploded view: state + toggle + capability report (driven by the canvas). */
   exploded: boolean
   explodable: boolean

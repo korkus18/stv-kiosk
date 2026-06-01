@@ -94,8 +94,10 @@ export default function KioskPage() {
   })
   void resetToAttract // exposed for later steps (e.g. an explicit exit button)
 
-  // Attract auto-cycle (timing only; prefetch/dispose live in KioskCanvas).
-  useAttractLoop({
+  // Attract auto-cycle. Advancement is event-driven: the canvas calls
+  // `advance` once the current model has loaded, played its (optional) flourish,
+  // and dwelled. Prefetch/dispose live in KioskCanvas.
+  const { advance: attractAdvance } = useAttractLoop({
     enabled: mode === 'attract',
     pool: attractPool,
     selectedId: selectedProductId,
@@ -158,6 +160,12 @@ export default function KioskPage() {
     onActivate: activate,
     onModelError,
     prefetchUrl,
+    // Enabled for ALL models by default; the flourish still only plays on models
+    // that are actually explodable (others gracefully just rotate). Opt a single
+    // model OUT with `attractExplode: false` in products.json.
+    attractExplode: selectedProduct?.attractExplode ?? true,
+    onAttractAdvance: attractAdvance,
+    modelRotation: selectedProduct?.modelRotation,
     exploded,
     explodable,
     onToggleExplode: () => setExploded((e) => !e),

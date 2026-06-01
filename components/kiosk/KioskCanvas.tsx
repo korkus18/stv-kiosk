@@ -1,6 +1,6 @@
 'use client'
 
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import {
   Environment,
@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { GLTFLoader } from 'three-stdlib'
 import type { AnchorState } from './HudChip'
 import type { CubeState } from './HudCube'
+import { LoadingSkeleton, LoadSignal } from './LoadingSkeleton'
 import {
   prepareExplode,
   partProgress,
@@ -72,6 +73,14 @@ interface KioskCanvasProps {
   onModelError?: (url: string) => void
   /** Next model the attract loop will show — prefetched for a seamless swap. */
   prefetchUrl?: string
+  /** Attract gate: play the slow explode→hold→reassemble flourish on THIS model
+   *  before crossfading on (only if it's also explodable). Default false. */
+  attractExplode?: boolean
+  /** Attract: current model's on-screen sequence (load → optional flourish →
+   *  dwell) finished — the loop should crossfade to the next model. */
+  onAttractAdvance?: () => void
+  /** Default model rest pose (Euler degrees [x,y,z]); absent = auto. */
+  modelRotation?: [number, number, number]
   /** Exploded-view: toggle state, per-model config, and capability report. */
   exploded?: boolean
   explodeConfig?: ExplodeField
@@ -98,6 +107,24 @@ const RESUME_DELAY_MS = 2800
 /** Ignore interaction this long after a flourish starts (the activating tap). */
 const FLOURISH_GRACE_MS = 320
 
+/** Attract idle flourish (gated models): slow explode → hold → reassemble, all
+ *  under the continuous slow auto-rotate. Distinct from the fast attract→active
+ *  reveal flourish above; shares the same explode progress mechanism. */
+/** Let a freshly-arrived model settle (its materialise fade-in finishes) and
+ *  read for a beat before the flourish begins. */
+const ATTRACT_SETTLE_MS = 600
+const ATTRACT_EXPLODE_MS = 800
+const ATTRACT_HOLD_MS = 600
+const ATTRACT_ASSEMBLE_MS = 800
+const ATTRACT_FLOURISH_MS = ATTRACT_EXPLODE_MS + ATTRACT_HOLD_MS + ATTRACT_ASSEMBLE_MS
+/** Quiet dwell after the flourish reassembles, before the crossfade to next. */
+const ATTRACT_POST_FLOURISH_MS = 1400
+/** Dwell for non-flourish models (just slow rotation), before the crossfade. */
+const ATTRACT_PLAIN_DWELL_MS = 5200
+/** Safety: advance even if a model never reports ready (hung/slow/broken load),
+ *  so the loop can never stall waiting on one model. */
+const ATTRACT_WATCHDOG_MS = 12000
+
 /**
  * Shared, mutable motion state for the reveal flourish + active auto-rotate.
  * Lives in a ref (no re-renders); read each frame by ModelMotion (rotation) and
@@ -108,6 +135,8 @@ type MotionState = {
   flourishStart: number // performance.now() at flourish start
   aborted: boolean // user interacted mid-flourish → bail to assembled
   lastInteract: number // performance.now() of last drag/zoom (active pause)
+  attractFlourishActive: boolean // attract idle explode→hold→reassemble running
+  attractFlourishStart: number // performance.now() at attract flourish start
 }
 
 function easeInOut(t: number) {
@@ -183,6 +212,9 @@ function GltfModel({
   explodeConfig,
   onExplodableChange,
   motionRef,
+  modelRotation,
+  calibrate = false,
+  onCalibrateChange,
 }: {
   url: string
   fitZRef: React.MutableRefObject<number>
@@ -191,18 +223,60 @@ function GltfModel({
   explodeConfig?: ExplodeField
   onExplodableChange?: (explodable: boolean) => void
   motionRef: React.MutableRefObject<MotionState>
+  /** Default rest pose (Euler degrees [x,y,z]); absent = auto. */
+  modelRotation?: [number, number, number]
+  /** Dev calibrator: freeze + let the user orient the model to read off values. */
+  calibrate?: boolean
+  onCalibrateChange?: (deg: [number, number, number]) => void
 }) {
   const { scene } = useGLTF(url, undefined, undefined, gltfLoaderExtender)
   const camera = useThree((s) => s.camera)
   const size = useThree((s) => s.size)
   const explodeRef = useRef<ExplodeState | null>(null)
   const progressRef = useRef(0)
+  /** Resolved rest pose (degrees) actually applied — auto heuristic or override. */
+  const autoDegRef = useRef<[number, number, number]>([0, 0, 0])
+  const baseDegRef = useRef<[number, number, number]>([0, 0, 0])
+  const calibrateRef = useRef(calibrate)
+  calibrateRef.current = calibrate
+  /** Materialise fade-in (0→1) on each mount — pairs with the loading skeleton's
+   *  dissolve so the real model fades in instead of popping. */
+  const materializeRef = useRef(0)
   const explodedRef = useRef(exploded)
   explodedRef.current = exploded
   const controls = useThree((s) => s.controls) as unknown as {
     minDistance: number
     maxDistance: number
   } | null
+
+  // Apply a rest pose (Euler degrees) to the model and RE-CENTRE on the rotated
+  // bounding box, so any orientation stays dead-centre (the spin rides on top).
+  // Neutralises the group spin for the measurement, like the fit pass does.
+  const applyPose = useCallback(
+    (deg: [number, number, number]) => {
+      const group = modelGroupRef.current
+      const saved = group ? group.rotation.clone() : null
+      if (group) {
+        group.rotation.set(0, 0, 0)
+        group.updateMatrixWorld(true)
+      }
+      scene.position.set(0, 0, 0)
+      scene.rotation.set(
+        THREE.MathUtils.degToRad(deg[0]),
+        THREE.MathUtils.degToRad(deg[1]),
+        THREE.MathUtils.degToRad(deg[2]),
+      )
+      scene.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(scene)
+      scene.position.sub(box.getCenter(new THREE.Vector3()))
+      scene.updateMatrixWorld(true)
+      if (group && saved) {
+        group.rotation.copy(saved)
+        group.updateMatrixWorld(true)
+      }
+    },
+    [scene, modelGroupRef],
+  )
 
   useEffect(() => {
     // Box measurements below use setFromObject → WORLD space, which folds in the
@@ -241,24 +315,15 @@ function GltfModel({
         scene.scale.z = -fitScale
       }
 
-      // Elongation tilt — long cylindrical objects (Bangalore et al.) get some
-      // 3D presence rather than a flat horizontal line. Threshold > 5 keeps
-      // Hayrick / chunkier shapes upright. MUST run BEFORE centring: rotation
-      // sits between scale and translation in the matrix, so centring computed on
-      // the un-tilted box would leave the tilted model off-centre (it pivots about
-      // the wrong point). Tilting first, then centring on the tilted box, keeps it
-      // dead-centre.
+      // Auto presentation pose — long cylindrical objects (Bangalore et al.) get
+      // a tilt for 3D presence rather than a flat horizontal line; threshold > 5
+      // keeps Hayrick / chunkier shapes upright. This is just the DEFAULT pose; a
+      // per-model `modelRotation` overrides it (see applyPose below). Centring
+      // happens in applyPose (re-centres on the rotated box → always dead-centre).
       const dims = [rawSize.x, rawSize.y, rawSize.z].sort((a, b) => b - a)
       const aspectRatio = dims[0] / Math.max(dims[1], 0.001)
-      if (aspectRatio > 5) {
-        scene.rotation.z = -Math.PI / 8
-        scene.rotation.y = Math.PI / 7
-        scene.rotation.x = Math.PI / 16
-      }
-
-      const scaledBox = new THREE.Box3().setFromObject(scene)
-      const scaledCenter = scaledBox.getCenter(new THREE.Vector3())
-      scene.position.sub(scaledCenter)
+      autoDegRef.current =
+        aspectRatio > 5 ? [11.25, 180 / 7, -22.5] : [0, 0, 0]
 
       scene.traverse((o) => {
         const m = o as THREE.Mesh
@@ -276,6 +341,12 @@ function GltfModel({
         }
       })
     }
+
+    // Resolve + apply the rest pose every run (so a changed `modelRotation`
+    // re-poses without a reload), unless the live calibrator owns the pose.
+    const baseDeg = modelRotation ?? autoDegRef.current
+    baseDegRef.current = baseDeg
+    if (!calibrateRef.current) applyPose(baseDeg)
 
     scene.updateMatrixWorld(true)
     const finalBox = new THREE.Box3().setFromObject(scene)
@@ -330,6 +401,29 @@ function GltfModel({
     progressRef.current = 0
     onExplodableChange?.(state !== null)
 
+    // Materialise fade-in: start every (re)mount fully transparent; useFrame
+    // ramps opacity back to each material's original over ~0.45s. The original
+    // opacity/transparent are stashed once per material so the restore is exact.
+    materializeRef.current = 0
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      const mats = Array.isArray(m.material) ? m.material : [m.material]
+      for (const mat of mats) {
+        if (!mat) continue
+        const rec = mat as THREE.Material & {
+          __origOpacity?: number
+          __origTransparent?: boolean
+        }
+        if (rec.__origOpacity === undefined) {
+          rec.__origOpacity = rec.opacity
+          rec.__origTransparent = rec.transparent
+        }
+        rec.transparent = true
+        rec.opacity = 0
+      }
+    })
+
     // Restore the live auto-spin we neutralised for measurement.
     if (group && savedRot) {
       group.rotation.copy(savedRot)
@@ -344,7 +438,78 @@ function GltfModel({
     size.height,
     explodeConfig,
     onExplodableChange,
+    modelRotation,
+    applyPose,
   ])
+
+  // Dev calibrator: freeze the model and let the user orient it (drag = yaw/pitch,
+  // arrows/Q-E = nudge, R = reset), re-centring + reporting the live Euler degrees
+  // so they can be copied into `modelRotation`. Exiting restores the saved pose.
+  useEffect(() => {
+    if (!calibrate) return
+    let deg: [number, number, number] = [...baseDegRef.current] as [
+      number,
+      number,
+      number,
+    ]
+    const norm = (d: number) => ((((d + 180) % 360) + 360) % 360) - 180
+    const push = () => {
+      deg = [norm(deg[0]), norm(deg[1]), norm(deg[2])]
+      applyPose(deg)
+      onCalibrateChange?.([
+        Math.round(deg[0]),
+        Math.round(deg[1]),
+        Math.round(deg[2]),
+      ])
+    }
+    push()
+
+    let lastX = 0
+    let lastY = 0
+    let dragging = false
+    const onDown = (e: PointerEvent) => {
+      dragging = true
+      lastX = e.clientX
+      lastY = e.clientY
+    }
+    const onMove = (e: PointerEvent) => {
+      if (!dragging || e.buttons === 0) return
+      const k = e.shiftKey ? 0.15 : 0.5
+      deg[1] += (e.clientX - lastX) * k
+      deg[0] += (e.clientY - lastY) * k
+      lastX = e.clientX
+      lastY = e.clientY
+      push()
+    }
+    const onUp = () => {
+      dragging = false
+    }
+    const onKey = (e: KeyboardEvent) => {
+      const step = e.shiftKey ? 1 : 5
+      if (e.key === 'ArrowLeft') deg[1] -= step
+      else if (e.key === 'ArrowRight') deg[1] += step
+      else if (e.key === 'ArrowUp') deg[0] -= step
+      else if (e.key === 'ArrowDown') deg[0] += step
+      else if (e.key === 'q' || e.key === 'Q') deg[2] -= step
+      else if (e.key === 'e' || e.key === 'E') deg[2] += step
+      else if (e.key === 'r' || e.key === 'R') deg = [0, 0, 0]
+      else return
+      e.preventDefault()
+      push()
+    }
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('keydown', onKey)
+      // Restore the saved (products.json / auto) pose on exit.
+      applyPose(baseDegRef.current)
+    }
+  }, [calibrate, applyPose, onCalibrateChange])
 
   // Animate parts (rest ↔ rest+offset) + shrink the root group so the exploded
   // model stays in frame. Composes with the root rotation, so it works mid-spin.
@@ -359,6 +524,21 @@ function GltfModel({
       const target = t < 0.45 ? t / 0.45 : t < 0.55 ? 1 : 1 - (t - 0.55) / 0.45
       progressRef.current +=
         (target - progressRef.current) * Math.min(1, delta * 12)
+    } else if (m.attractFlourishActive && st) {
+      // Attract idle flourish: slow explode → hold → reassemble (the spin keeps
+      // running, owned by ModelMotion). Eased target, gently smoothed.
+      const e = performance.now() - m.attractFlourishStart
+      let target: number
+      if (e < ATTRACT_EXPLODE_MS) {
+        target = easeInOut(e / ATTRACT_EXPLODE_MS)
+      } else if (e < ATTRACT_EXPLODE_MS + ATTRACT_HOLD_MS) {
+        target = 1
+      } else {
+        const a = (e - ATTRACT_EXPLODE_MS - ATTRACT_HOLD_MS) / ATTRACT_ASSEMBLE_MS
+        target = 1 - easeInOut(Math.min(1, a))
+      }
+      progressRef.current +=
+        (target - progressRef.current) * Math.min(1, delta * 8)
     } else {
       const target = explodedRef.current ? 1 : 0
       progressRef.current +=
@@ -377,6 +557,30 @@ function GltfModel({
     }
     if (modelGroupRef.current) {
       modelGroupRef.current.scale.setScalar(1 + (EXPLODE_FIT_SCALE - 1) * g)
+    }
+
+    // Materialise fade-in (hands off from the loading skeleton).
+    if (materializeRef.current < 1) {
+      materializeRef.current = Math.min(1, materializeRef.current + delta / 0.45)
+      const mp = materializeRef.current
+      const done = mp >= 1
+      scene.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        if (!mesh.isMesh) return
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        for (const mat of mats) {
+          const rec = mat as THREE.Material & {
+            __origOpacity?: number
+            __origTransparent?: boolean
+          }
+          if (rec.__origOpacity === undefined) continue
+          rec.opacity = rec.__origOpacity * mp
+          if (done) {
+            rec.transparent = rec.__origTransparent ?? false
+            rec.opacity = rec.__origOpacity
+          }
+        }
+      })
     }
   })
 
@@ -618,6 +822,8 @@ interface ModelMotionProps {
   modelGroupRef: React.RefObject<THREE.Group | null>
   attract: boolean
   motionRef: React.MutableRefObject<MotionState>
+  /** Dev calibrator: freeze the spin at identity so the pose is WYSIWYG. */
+  calibrate?: boolean
 }
 
 /**
@@ -628,7 +834,7 @@ interface ModelMotionProps {
  *    (drag/zoom), resuming after RESUME_DELAY_MS of stillness.
  * Explode is handled separately (GltfModel) on the same flourish clock.
  */
-function ModelMotion({ modelGroupRef, attract, motionRef }: ModelMotionProps) {
+function ModelMotion({ modelGroupRef, attract, motionRef, calibrate }: ModelMotionProps) {
   const speed = useRef<number>(0)
 
   useFrame((_, delta) => {
@@ -636,6 +842,13 @@ function ModelMotion({ modelGroupRef, attract, motionRef }: ModelMotionProps) {
     if (!g) return
     const m = motionRef.current
     const now = performance.now()
+
+    if (calibrate) {
+      // Freeze at identity so the calibrator's pose is shown exactly.
+      g.rotation.set(0, 0, 0)
+      speed.current = 0
+      return
+    }
 
     if (m.flourishActive && !m.aborted) {
       const t = Math.min(1, (now - m.flourishStart) / FLOURISH_MS)
@@ -692,18 +905,26 @@ export function KioskCanvas({
   attract = false,
   onModelError,
   prefetchUrl,
+  attractExplode = false,
+  onAttractAdvance,
+  modelRotation,
   exploded = false,
   explodeConfig,
   onExplodableChange,
 }: KioskCanvasProps) {
   const modelGroupRef = useRef<THREE.Group | null>(null)
   const orbitControlsRef = useRef<OrbitControlsLike | null>(null)
-  const fitZRef = useRef<number>(0)
+  // Seed a sensible framing distance so the loading skeleton is well-framed even
+  // on the very first load (before any model has reported its real fit). Real
+  // models overwrite this the moment they load.
+  const fitZRef = useRef<number>(2.8)
   const motionRef = useRef<MotionState>({
     flourishActive: false,
     flourishStart: 0,
     aborted: false,
     lastInteract: 0,
+    attractFlourishActive: false,
+    attractFlourishStart: 0,
   })
 
   // Reveal flourish: when entering active, run the explode+360°+reassemble for
@@ -719,6 +940,10 @@ export function KioskCanvas({
       return
     }
     if (was && !attract) {
+      // A touch during attract (even mid idle-flourish) lands here: cleanly
+      // stop the idle flourish and hand its explode progress to the active
+      // reveal — same shared progressRef, so no double explode / conflict.
+      m.attractFlourishActive = false
       m.flourishActive = true
       m.flourishStart = performance.now()
       m.aborted = false
@@ -760,6 +985,48 @@ export function KioskCanvas({
   // and the transition keep it off (the attract overlay also blocks input).
   const [controlsEnabled, setControlsEnabled] = useState(false)
 
+  // True while the CURRENT model's GLTF is actually loading (drives the
+  // materialisation skeleton). Toggled by a Suspense fallback signal, so cached
+  // / prefetched models never flip it → no skeleton flash on attract swaps.
+  const [modelLoading, setModelLoading] = useState(false)
+
+  // Attract loop sequencing. `modelReady` flips true once the active model has
+  // loaded + been measured (GltfModel reports explodable at the end of its fit
+  // pass — the precise "loaded, not half-loaded" signal, tied to the loading
+  // skeleton handoff). explodableRef rides along so the gate can read it without
+  // a render. Latest gate / advance callback are held in refs so the sequence
+  // effect doesn't restart when only those change.
+  const [modelReady, setModelReady] = useState(false)
+  const explodableRef = useRef(false)
+  const attractExplodeRef = useRef(attractExplode)
+  attractExplodeRef.current = attractExplode
+  const onAttractAdvanceRef = useRef(onAttractAdvance)
+  onAttractAdvanceRef.current = onAttractAdvance
+
+  const handleExplodable = useCallback(
+    (explodable: boolean) => {
+      explodableRef.current = explodable
+      setModelReady(true)
+      onExplodableChange?.(explodable)
+    },
+    [onExplodableChange],
+  )
+
+  // Dev-only model-orientation calibrator. Toggle with `c`; stripped from
+  // production builds (NODE_ENV === 'production' → never attaches / renders).
+  const calibrationEnabled = process.env.NODE_ENV !== 'production'
+  const [calibrate, setCalibrate] = useState(false)
+  const [calibDeg, setCalibDeg] = useState<[number, number, number]>([0, 0, 0])
+  useEffect(() => {
+    if (!calibrationEnabled) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'c' || e.key === 'C') setCalibrate((v) => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [calibrationEnabled])
+  const calibrating = calibrationEnabled && calibrate
+
   // One-time "drag to rotate" hint — shows on the FIRST activation of the
   // session (module flag survives remounts/orientation changes) and never again.
   const [showHint, setShowHint] = useState(false)
@@ -797,12 +1064,71 @@ export function KioskCanvas({
   useEffect(() => {
     if (modelUrl === activeUrl) return
     setOpacity(0)
+    // A new model is incoming — it's not "ready" until it loads + measures.
+    setModelReady(false)
     const t = setTimeout(() => {
       setActiveUrl(modelUrl)
       setOpacity(1)
     }, CROSSFADE_HALF_MS)
     return () => clearTimeout(t)
   }, [modelUrl, activeUrl])
+
+  // Attract per-model sequence: once the active model has loaded + faded in
+  // (modelReady && opacity === 1), let it settle, then — if it's gated AND
+  // explodable — play the slow explode→hold→reassemble flourish; otherwise just
+  // dwell on the slow rotation. When the sequence (or dwell) ends, ask the loop
+  // to crossfade to the next model. A watchdog guarantees progress even if a
+  // model never reports ready (hung/broken load), so the loop never stalls.
+  // Deps intentionally exclude attractExplode / onAttractAdvance (read via refs)
+  // so the sequence starts exactly once per arrived model.
+  useEffect(() => {
+    const m = motionRef.current
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const clearAll = () => {
+      timers.forEach(clearTimeout)
+      timers.length = 0
+    }
+    m.attractFlourishActive = false
+
+    if (calibrating) return // calibrator owns the model; no flourish / advance
+    if (!attract) return // active mode → the reveal flourish owns the explode
+
+    // Not arrived yet → wait, but guard against a model that never loads.
+    if (!modelReady || opacity !== 1) {
+      timers.push(
+        setTimeout(() => onAttractAdvanceRef.current?.(), ATTRACT_WATCHDOG_MS),
+      )
+      return clearAll
+    }
+
+    // Arrived. Gate the flourish on the per-model flag AND real explodability;
+    // everything else just rotates for the dwell (graceful degrade).
+    const doFlourish = attractExplodeRef.current && explodableRef.current
+    if (doFlourish) {
+      timers.push(
+        setTimeout(() => {
+          m.attractFlourishActive = true
+          m.attractFlourishStart = performance.now()
+        }, ATTRACT_SETTLE_MS),
+      )
+      timers.push(
+        setTimeout(() => {
+          m.attractFlourishActive = false
+        }, ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS),
+      )
+      timers.push(
+        setTimeout(
+          () => onAttractAdvanceRef.current?.(),
+          ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS + ATTRACT_POST_FLOURISH_MS,
+        ),
+      )
+    } else {
+      timers.push(
+        setTimeout(() => onAttractAdvanceRef.current?.(), ATTRACT_PLAIN_DWELL_MS),
+      )
+    }
+    return clearAll
+  }, [attract, modelReady, opacity, activeUrl, calibrating])
 
   // Prefetch the upcoming model so the crossfade swap is instant.
   useEffect(() => {
@@ -860,10 +1186,21 @@ export function KioskCanvas({
         }}
       >
         <Lights />
+
+        {/* Environment HDR in its OWN Suspense so its load never blanks the
+            model area / skeleton. */}
         <Suspense fallback={null}>
           <Environment preset="apartment" />
+        </Suspense>
 
-          <group ref={modelGroupRef}>
+        <group ref={modelGroupRef}>
+          {/* Materialisation skeleton — sibling of the model, inside the group,
+              so it rides the spin and sits inside the HUD cube. */}
+          <LoadingSkeleton active={modelLoading} />
+
+          {/* Only the model suspends here; its fallback just flips modelLoading
+              (renders no 3D), so cached models don't flash the skeleton. */}
+          <Suspense fallback={<LoadSignal onChange={setModelLoading} />}>
             <ModelErrorBoundary url={activeUrl} onError={onModelError}>
               <GltfModel
                 url={activeUrl}
@@ -871,43 +1208,47 @@ export function KioskCanvas({
                 modelGroupRef={modelGroupRef}
                 exploded={exploded}
                 explodeConfig={explodeConfig}
-                onExplodableChange={onExplodableChange}
+                onExplodableChange={handleExplodable}
                 motionRef={motionRef}
+                modelRotation={modelRotation}
+                calibrate={calibrating}
+                onCalibrateChange={setCalibDeg}
               />
             </ModelErrorBoundary>
-          </group>
+          </Suspense>
+        </group>
 
-          <ContactShadows
-            position={[0, -0.5, 0]}
-            opacity={0.35}
-            blur={2.5}
-            far={1}
-            scale={5}
-            resolution={1024}
-          />
+        <ContactShadows
+          position={[0, -0.5, 0]}
+          opacity={0.35}
+          blur={2.5}
+          far={1}
+          scale={5}
+          resolution={1024}
+        />
 
-          <AnchorProjector
-            anchors={anchors}
-            modelGroupRef={modelGroupRef}
-            anchorStateRef={anchorStateRef}
-            cubeStateRef={cubeStateRef}
-          />
-          <ModelMotion
-            modelGroupRef={modelGroupRef}
-            attract={attract}
-            motionRef={motionRef}
-          />
-          <CameraDirector
-            attract={attract}
-            orientation={orientation}
-            fitZRef={fitZRef}
-            onControlsEnabledChange={setControlsEnabled}
-          />
-        </Suspense>
+        <AnchorProjector
+          anchors={anchors}
+          modelGroupRef={modelGroupRef}
+          anchorStateRef={anchorStateRef}
+          cubeStateRef={cubeStateRef}
+        />
+        <ModelMotion
+          modelGroupRef={modelGroupRef}
+          attract={attract}
+          motionRef={motionRef}
+          calibrate={calibrating}
+        />
+        <CameraDirector
+          attract={attract}
+          orientation={orientation}
+          fitZRef={fitZRef}
+          onControlsEnabledChange={setControlsEnabled}
+        />
 
         <OrbitControls
           ref={orbitControlsRef as React.MutableRefObject<never>}
-          enabled={controlsEnabled}
+          enabled={controlsEnabled && !calibrating}
           enablePan={false}
           enableDamping
           dampingFactor={0.05}
@@ -933,6 +1274,61 @@ export function KioskCanvas({
           </AnimatePresence>
         </>
       )}
+
+      {calibrating && <CalibratorPanel deg={calibDeg} />}
+    </div>
+  )
+}
+
+/** Dev-only calibrator HUD: shows the live rest-pose Euler degrees + a copy
+ *  button so the value can be pasted straight into a product's `modelRotation`. */
+function CalibratorPanel({ deg }: { deg: [number, number, number] }) {
+  const snippet = `"modelRotation": [${deg[0]}, ${deg[1]}, ${deg[2]}]`
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 16,
+        left: 16,
+        zIndex: 50,
+        padding: '12px 14px',
+        borderRadius: 10,
+        background: 'rgba(17, 24, 39, 0.92)',
+        color: '#e5e7eb',
+        fontFamily:
+          'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Monaco, Consolas, monospace',
+        fontSize: 12,
+        lineHeight: 1.5,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+        maxWidth: 320,
+      }}
+    >
+      <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: 6 }}>
+        ORIENTATION CALIBRATOR
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <code style={{ color: '#fbbf24' }}>{snippet}</code>
+      </div>
+      <button
+        onClick={() => navigator.clipboard?.writeText(snippet)}
+        style={{
+          appearance: 'none',
+          border: '1px solid #374151',
+          background: '#1f2937',
+          color: '#e5e7eb',
+          borderRadius: 6,
+          padding: '5px 10px',
+          fontSize: 11,
+          cursor: 'pointer',
+          marginBottom: 8,
+        }}
+      >
+        Copy to clipboard
+      </button>
+      <div style={{ color: '#9ca3af', fontSize: 11 }}>
+        Drag = yaw/pitch · ←→↑↓ = nudge · Q/E = roll · Shift = fine · R = reset ·
+        C = exit
+      </div>
     </div>
   )
 }

@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Product } from '@/data/products'
 
-/** Default dwell on each model before the crossfade to the next. */
+/** Fallback dwell (ms) — used by the canvas only as a safety watchdog. */
 export const DEFAULT_ATTRACT_INTERVAL_MS = 6000
 
 export interface UseAttractLoopOptions {
@@ -13,13 +13,22 @@ export interface UseAttractLoopOptions {
   pool: Product[]
   selectedId: string
   setSelectedId: (id: string) => void
-  intervalMs?: number
+}
+
+export interface UseAttractLoopResult {
+  /** Advance to the next pool item. Called by the canvas when the current
+   *  model's attract sequence (load → optional flourish → dwell) completes. */
+  advance: () => void
 }
 
 /**
- * Drives the attract auto-cycle: advances the selected product through `pool`
- * every `intervalMs`. Pure timing/state — no 3D imports, so it stays out of the
- * heavy R3F bundle. Prefetch + disposal of models is owned by KioskCanvas.
+ * Drives the attract auto-cycle. Advancement is EVENT-DRIVEN, not on a fixed
+ * timer: the canvas owns each model's on-screen lifecycle (wait for load → slow
+ * explode/reassemble flourish if gated → dwell) and calls `advance()` when it's
+ * time to crossfade to the next model — so the loop never explodes a half-loaded
+ * model and per-model dwell adapts to the flourish. Pure timing/state, no 3D
+ * imports, so it stays out of the heavy R3F bundle. Prefetch + disposal of
+ * models is owned by KioskCanvas.
  *
  * If the current selection isn't in the pool (entering attract, or the shown
  * model just got marked broken), it snaps to the first pool item so the loop
@@ -30,9 +39,8 @@ export function useAttractLoop({
   pool,
   selectedId,
   setSelectedId,
-  intervalMs = DEFAULT_ATTRACT_INTERVAL_MS,
-}: UseAttractLoopOptions) {
-  // Latest values, read inside the interval without re-arming it each tick.
+}: UseAttractLoopOptions): UseAttractLoopResult {
+  // Latest values, read inside `advance` without re-creating the callback.
   const poolRef = useRef(pool)
   poolRef.current = pool
   const selRef = useRef(selectedId)
@@ -48,16 +56,13 @@ export function useAttractLoop({
     }
   }, [enabled, pool, selectedId])
 
-  // Advance timer — steady cadence, not reset by each advance.
-  useEffect(() => {
-    if (!enabled || pool.length <= 1) return
-    const timer = setInterval(() => {
-      const p = poolRef.current
-      if (p.length <= 1) return
-      const i = p.findIndex((x) => x.id === selRef.current)
-      const next = i < 0 ? 0 : (i + 1) % p.length
-      setRef.current(p[next].id)
-    }, intervalMs)
-    return () => clearInterval(timer)
-  }, [enabled, intervalMs, pool.length])
+  const advance = useCallback(() => {
+    const p = poolRef.current
+    if (p.length <= 1) return
+    const i = p.findIndex((x) => x.id === selRef.current)
+    const next = i < 0 ? 0 : (i + 1) % p.length
+    setRef.current(p[next].id)
+  }, [])
+
+  return { advance }
 }
