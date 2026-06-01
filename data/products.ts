@@ -12,6 +12,7 @@ export type ExplodeConfig = {
 /** `false` = force-off; object = tune; absent = auto (axial, default distance). */
 export type ExplodeField = boolean | ExplodeConfig
 
+
 export type Product = {
   id: string
   category: CategoryId

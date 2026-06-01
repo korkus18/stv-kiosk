@@ -332,7 +332,7 @@
       "NW (kg)": "~170",
       "NEQ (kg)": "~167"
     },
-    "model3D": null,
+    "model3D": "/models/propelling_charge_m4a2_charge_7/M4A2_Charge7.gltf",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/hnaci-napln-m4a2"
@@ -638,7 +638,7 @@
       "Certification": "NATO STANAG",
       "Application": "Military"
     },
-    "model3D": null,
+    "model3D": "/models/scorpio_556x45_nato/556x45_NATO.gltf",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-556x45-mm-cz"
@@ -698,7 +698,7 @@
       "Certification": "CIP",
       "Application": "Law enforcement"
     },
-    "model3D": null,
+    "model3D": "/models/scorpio_9mm_luger_tfmj_8g/9mm_Luger_TFMJ_8g.gltf",
     "visible": true,
     "featured": false,
     "webUrl": null
@@ -718,7 +718,7 @@
       "Certification": "NATO STANAG",
       "Application": "Military"
     },
-    "model3D": null,
+    "model3D": "/models/scorpio_9x19_fmj_8g_nato/9x19_FMJ_8g_NATO.gltf",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-9-mm-nato-cz"

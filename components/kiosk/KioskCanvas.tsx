@@ -12,6 +12,7 @@ import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { GLTFLoader } from 'three-stdlib'
 import type { AnchorState } from './HudChip'
+import type { CubeState } from './HudCube'
 import {
   prepareExplode,
   partProgress,
@@ -58,6 +59,8 @@ export interface HudAnchor {
 interface KioskCanvasProps {
   anchors: HudAnchor[]
   anchorStateRef: React.MutableRefObject<Record<string, AnchorState>>
+  /** Screen-space state of the cube wireframe + leaders (per chip), per frame. */
+  cubeStateRef: React.MutableRefObject<Record<string, CubeState>>
   modelUrl?: string
   /** Portrait: no sidebar offset, slightly tighter framing.
    *  Landscape (default): existing recipe with view-offset for right-side
@@ -202,6 +205,20 @@ function GltfModel({
   } | null
 
   useEffect(() => {
+    // Box measurements below use setFromObject → WORLD space, which folds in the
+    // modelGroup's live auto-spin. Neutralise that spin for the whole measurement
+    // pass so normalisation (scale + centring) and the camera fit are computed in
+    // the group's own frame — spin-independent. Without this, whatever angle the
+    // group happened to be at when a model loaded skewed its size AND centre (the
+    // model then orbited off-centre as it spun). Restored at the end; no render
+    // happens in between, so it's invisible.
+    const group = modelGroupRef.current
+    const savedRot = group ? group.rotation.clone() : null
+    if (group) {
+      group.rotation.set(0, 0, 0)
+      group.updateMatrixWorld(true)
+    }
+
     const flagged = (scene as unknown as Record<symbol, boolean>)[FIT_APPLIED]
 
     if (!flagged) {
@@ -224,13 +241,13 @@ function GltfModel({
         scene.scale.z = -fitScale
       }
 
-      const scaledBox = new THREE.Box3().setFromObject(scene)
-      const scaledCenter = scaledBox.getCenter(new THREE.Vector3())
-      scene.position.sub(scaledCenter)
-
-      // Elongation tilt — long cylindrical objects (Bangalore et al.) get
-      // some 3D presence rather than a flat horizontal line. Threshold > 5
-      // keeps Hayrick / chunkier shapes upright.
+      // Elongation tilt — long cylindrical objects (Bangalore et al.) get some
+      // 3D presence rather than a flat horizontal line. Threshold > 5 keeps
+      // Hayrick / chunkier shapes upright. MUST run BEFORE centring: rotation
+      // sits between scale and translation in the matrix, so centring computed on
+      // the un-tilted box would leave the tilted model off-centre (it pivots about
+      // the wrong point). Tilting first, then centring on the tilted box, keeps it
+      // dead-centre.
       const dims = [rawSize.x, rawSize.y, rawSize.z].sort((a, b) => b - a)
       const aspectRatio = dims[0] / Math.max(dims[1], 0.001)
       if (aspectRatio > 5) {
@@ -238,6 +255,10 @@ function GltfModel({
         scene.rotation.y = Math.PI / 7
         scene.rotation.x = Math.PI / 16
       }
+
+      const scaledBox = new THREE.Box3().setFromObject(scene)
+      const scaledCenter = scaledBox.getCenter(new THREE.Vector3())
+      scene.position.sub(scaledCenter)
 
       scene.traverse((o) => {
         const m = o as THREE.Mesh
@@ -258,15 +279,19 @@ function GltfModel({
 
     scene.updateMatrixWorld(true)
     const finalBox = new THREE.Box3().setFromObject(scene)
+    // Frame on the BOUNDING SPHERE (3D diagonal) — rotation-invariant, so every
+    // model fills the frame to the same envelope regardless of shape or spin
+    // angle → consistent apparent size, never clips. (The real "different sizes"
+    // bug was the spin-corrupted measurement above, now neutralised; this stays a
+    // plain, uniform sphere fit.)
     const diag = finalBox.getSize(new THREE.Vector3()).length()
 
     const persp = camera as THREE.PerspectiveCamera
     const fov = persp.fov ?? 30
 
-    // Aspect-aware fit: distance so the model fits BOTH the vertical and the
-    // horizontal FOV (with margin via 0.8). In landscape the vertical term wins
-    // (unchanged framing); in the narrow portrait viewport the horizontal term
-    // wins, so wide/long models no longer overflow the side edges.
+    // Aspect-aware: fit the sphere to BOTH FOV axes (margin via 0.8) and take the
+    // farther distance. Landscape → vertical term wins; narrow portrait → the
+    // horizontal term wins, so wide/long models don't overflow the side edges.
     const vHalf = (fov * Math.PI) / 360
     const aspect = size.width / Math.max(size.height, 1)
     const hHalf = Math.atan(Math.tan(vHalf) * aspect)
@@ -304,7 +329,22 @@ function GltfModel({
     explodeRef.current = state
     progressRef.current = 0
     onExplodableChange?.(state !== null)
-  }, [scene, camera, controls, fitZRef, size.width, size.height, explodeConfig, onExplodableChange])
+
+    // Restore the live auto-spin we neutralised for measurement.
+    if (group && savedRot) {
+      group.rotation.copy(savedRot)
+      group.updateMatrixWorld(true)
+    }
+  }, [
+    scene,
+    camera,
+    controls,
+    fitZRef,
+    size.width,
+    size.height,
+    explodeConfig,
+    onExplodableChange,
+  ])
 
   // Animate parts (rest ↔ rest+offset) + shrink the root group so the exploded
   // model stays in frame. Composes with the root rotation, so it works mid-spin.
@@ -464,40 +504,93 @@ function CameraDirector({
   return null
 }
 
+/** Leader-pin sits at this fraction along the corner direction (≈ model surface). */
+const PIN_RADIUS = 0.42
+/** Cube-edge stub length, as a fraction of a full cube edge (corner → neighbour). */
+const EDGE_FRAC = 0.32
+/** Back-face fade band for the leader occlusion (facing = normal·viewDir). */
+const PIN_FADE_BAND = 0.5
+/** Per-frame smoothing of leader strength so occlusion fades, never snaps. */
+const PIN_DAMP = 0.18
+
 interface AnchorProjectorProps {
   anchors: HudAnchor[]
   modelGroupRef: React.RefObject<THREE.Group | null>
   anchorStateRef: React.MutableRefObject<Record<string, AnchorState>>
+  cubeStateRef: React.MutableRefObject<Record<string, CubeState>>
 }
 
+/**
+ * Projects everything that rides the imaginary cube through the model's FULL world
+ * matrix (spin included), so it all rotates WITH the model:
+ *   - the chip corner (→ anchorStateRef; HudChip is a DOM billboard, text upright)
+ *   - 3 cube-edge stubs per corner (the "3 lines" that sketch the cube edges)
+ *   - a leader pin on the model surface along the corner direction, with a cheap
+ *     back-face occlusion fade (→ cubeStateRef, drawn by HudCube).
+ */
 function AnchorProjector({
   anchors,
   modelGroupRef,
   anchorStateRef,
+  cubeStateRef,
 }: AnchorProjectorProps) {
-  const tempVec = useMemo(() => new THREE.Vector3(), [])
-  // Project anchors through the model's position+scale but NOT its spin, so the
-  // HUD chips sit as a fixed frame while the model rotates inside.
-  const frameMat = useMemo(() => new THREE.Matrix4(), [])
+  const corner = useMemo(() => new THREE.Vector3(), [])
+  const tmp = useMemo(() => new THREE.Vector3(), [])
+  const pinWorld = useMemo(() => new THREE.Vector3(), [])
+  const normalW = useMemo(() => new THREE.Vector3(), [])
+  const viewDir = useMemo(() => new THREE.Vector3(), [])
   const mPos = useMemo(() => new THREE.Vector3(), [])
-  const mScale = useMemo(() => new THREE.Vector3(), [])
   const mQuat = useMemo(() => new THREE.Quaternion(), [])
-  const noSpin = useMemo(() => new THREE.Quaternion(), [])
+  const mScale = useMemo(() => new THREE.Vector3(), [])
 
   useFrame(({ camera, size }) => {
-    if (!modelGroupRef.current) return
-    modelGroupRef.current.matrixWorld.decompose(mPos, mQuat, mScale)
-    frameMat.compose(mPos, noSpin, mScale)
+    const g = modelGroupRef.current
+    if (!g) return
+    g.matrixWorld.decompose(mPos, mQuat, mScale)
+    const sx = (v: THREE.Vector3) => (v.x * 0.5 + 0.5) * size.width
+    const sy = (v: THREE.Vector3) => (-v.y * 0.5 + 0.5) * size.height
+
     for (const anchor of anchors) {
-      tempVec.copy(anchor.anchorPos)
-      tempVec.applyMatrix4(frameMat)
-      tempVec.project(camera)
+      const id = anchor.id
 
-      const x = (tempVec.x * 0.5 + 0.5) * size.width
-      const y = (-tempVec.y * 0.5 + 0.5) * size.height
-      const visible = tempVec.z < 1
+      // Chip corner.
+      corner.copy(anchor.anchorPos).applyMatrix4(g.matrixWorld).project(camera)
+      const cx = sx(corner)
+      const cy = sy(corner)
+      anchorStateRef.current[id] = { x: cx, y: cy, visible: corner.z < 1, z: corner.z }
 
-      anchorStateRef.current[anchor.id] = { x, y, visible, z: tempVec.z }
+      // 3 cube-edge stubs: shorten the corner toward its neighbour along each axis.
+      const stubs: { x: number; y: number }[] = []
+      for (let a = 0; a < 3; a++) {
+        tmp.copy(anchor.anchorPos)
+        tmp.setComponent(a, tmp.getComponent(a) * (1 - 2 * EDGE_FRAC))
+        tmp.applyMatrix4(g.matrixWorld).project(camera)
+        stubs.push({ x: sx(tmp), y: sy(tmp) })
+      }
+
+      // Leader pin on the model surface + back-face occlusion.
+      normalW.copy(anchor.anchorPos).normalize()
+      pinWorld.copy(normalW).multiplyScalar(PIN_RADIUS).applyMatrix4(g.matrixWorld)
+      normalW.applyQuaternion(mQuat)
+      viewDir.copy(pinWorld).sub(camera.position).normalize()
+      const facing = normalW.dot(viewDir)
+      let strength = THREE.MathUtils.clamp(
+        (PIN_FADE_BAND - facing) / (2 * PIN_FADE_BAND),
+        0,
+        1,
+      )
+      pinWorld.project(camera)
+      if (pinWorld.z >= 1) strength = 0
+      const prev = cubeStateRef.current[id]
+      const smoothed = prev ? prev.strength + (strength - prev.strength) * PIN_DAMP : strength
+      cubeStateRef.current[id] = {
+        cx,
+        cy,
+        stubs,
+        px: sx(pinWorld),
+        py: sy(pinWorld),
+        strength: smoothed,
+      }
     }
   })
 
@@ -576,6 +669,7 @@ function Lights() {
 export function KioskCanvas({
   anchors,
   anchorStateRef,
+  cubeStateRef,
   modelUrl = HAYRICK_GLTF_PATH,
   orientation = 'landscape',
   attract = false,
@@ -779,6 +873,7 @@ export function KioskCanvas({
             anchors={anchors}
             modelGroupRef={modelGroupRef}
             anchorStateRef={anchorStateRef}
+            cubeStateRef={cubeStateRef}
           />
           <ModelMotion
             modelGroupRef={modelGroupRef}
@@ -919,20 +1014,24 @@ function CircleButton({
 function GestureHint({ orientation }: { orientation: 'landscape' | 'portrait' }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
+      // Keep the centring translate alive alongside the animated scale (framer
+      // would otherwise overwrite the whole transform).
+      transformTemplate={(_, generated) => `translate(-50%, -50%) ${generated}`}
       style={{
-        // Sits just ABOVE the zoom row and shares its horizontal centre (on the
-        // model — landscape is nudged left by the active view-offset).
+        // Floats centred ON the model — it's a hint about manipulating the model,
+        // so it sits where the gesture happens. Shares the model's horizontal
+        // centre (landscape nudged left by the active view-offset) and the canvas
+        // vertical centre. Auto-dismisses (4.5s) and clears on first touch.
         position: 'absolute',
-        bottom: orientation === 'portrait' ? 204 : 132,
+        top: '50%',
         left:
           orientation === 'portrait'
             ? '50%'
             : `${(0.5 - ACTIVE_VIEW_OFFSET) * 100}%`,
-        transform: 'translateX(-50%)',
         display: 'flex',
         alignItems: 'center',
         gap: 10,

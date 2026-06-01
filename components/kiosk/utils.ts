@@ -26,8 +26,19 @@ export type KioskSharedProps = {
 }
 
 // ── HUD anchor positions (modelGroup local space) ─────────────────────────
-// Shared between landscape and portrait variants. Tuned for the 0.9-unit
-// normalized bbox inside KioskCanvas.
+// The four category chips ride the corners of an imaginary cube AROUND the
+// model and rotate WITH it (projected through the full world matrix, spin
+// included — see AnchorProjector). The cube is larger than the model's 0.88
+// normalized bbox so the chips sit clearly OUTSIDE the silhouette. Chosen
+// corners keep each chip in its screen quadrant (x,y = quadrant) while the z
+// sign alternates top/bottom → the cube reads as rotating in depth, not as a
+// flat square. Chips are centred on the corner (no offset); their text stays
+// upright (HudChip is a DOM billboard).
+// Half-size of the imaginary cube the chips ride. The model is framed to ~80% of
+// the view, so corners (CUBE_HALF·√3 from centre) must stay inside that to keep
+// the chips on-screen and readable. 0.5 sits the chips just outside the model
+// silhouette. Main tuning knob — raise for "further out", at the cost of edge clip.
+const CUBE_HALF = 0.5
 export const HUD_ANCHOR_POSITIONS: ReadonlyArray<{
   id: string
   pos: THREE.Vector3
@@ -35,13 +46,10 @@ export const HUD_ANCHOR_POSITIONS: ReadonlyArray<{
   chipOffset: { x: number; y: number }
   delay: number
 }> = [
-  // Top anchors lifted from y=0.39 to y=0.52 so DESIGNATION/TYPE chips sit
-  // ABOVE the model's normalized bbox top (max.y ≈ 0.45) instead of inside
-  // the silhouette where they'd overlap the model's crown.
-  { id: 'designation', pos: new THREE.Vector3( 0.31,  0.52, 0.25), align: 'right', chipOffset: { x:  130, y: -20 }, delay: 0.00 },
-  { id: 'type',        pos: new THREE.Vector3(-0.31,  0.52, 0.25), align: 'left',  chipOffset: { x: -140, y: -20 }, delay: 0.05 },
-  { id: 'metric',      pos: new THREE.Vector3( 0.31, -0.31, 0.25), align: 'right', chipOffset: { x:  130, y:   0 }, delay: 0.10 },
-  { id: 'status',      pos: new THREE.Vector3(-0.31, -0.31, 0.25), align: 'left',  chipOffset: { x: -130, y:   0 }, delay: 0.15 },
+  { id: 'designation', pos: new THREE.Vector3( CUBE_HALF,  CUBE_HALF,  CUBE_HALF), align: 'right', chipOffset: { x: 0, y: 0 }, delay: 0.00 },
+  { id: 'type',        pos: new THREE.Vector3(-CUBE_HALF,  CUBE_HALF,  CUBE_HALF), align: 'left',  chipOffset: { x: 0, y: 0 }, delay: 0.05 },
+  { id: 'metric',      pos: new THREE.Vector3( CUBE_HALF, -CUBE_HALF, -CUBE_HALF), align: 'right', chipOffset: { x: 0, y: 0 }, delay: 0.10 },
+  { id: 'status',      pos: new THREE.Vector3(-CUBE_HALF, -CUBE_HALF, -CUBE_HALF), align: 'left',  chipOffset: { x: 0, y: 0 }, delay: 0.15 },
 ]
 
 export function getDesignation(product: Product): string {

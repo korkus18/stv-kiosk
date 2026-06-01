@@ -13,6 +13,7 @@ import { EmptyModelPlaceholder } from './EmptyModelPlaceholder'
 import { CategoryFilter } from './CategoryFilter'
 import { InventorySidebar } from './InventorySidebar'
 import { HudChip, type AnchorState } from './HudChip'
+import { HudCube, type CubeState } from './HudCube'
 import { tokens } from './tokens'
 import type { HudAnchor } from './KioskCanvas'
 
@@ -102,6 +103,8 @@ export function KioskLandscape({
     metric:      { x: 0, y: 0, visible: false, z: 0 },
     status:      { x: 0, y: 0, visible: false, z: 0 },
   })
+
+  const cubeStateRef = useRef<Record<string, CubeState>>({})
 
   const [focusedChipId, setFocusedChipId] = useState<string | null>(null)
   useEffect(() => {
@@ -231,6 +234,7 @@ export function KioskLandscape({
               <KioskCanvas
                 anchors={hudAnchors}
                 anchorStateRef={anchorStateRef}
+                cubeStateRef={cubeStateRef}
                 modelUrl={selectedProduct.model3D ?? undefined}
                 orientation="landscape"
                 attract={!isActive}
@@ -247,6 +251,11 @@ export function KioskLandscape({
               variant="gallery"
             />
           ) : null}
+
+          {/* Imaginary cube wireframe + leader lines (rotate with the model) */}
+          {isActive && !qrOpen && has3D && selectedProduct && (
+            <HudCube ids={hudAnchors.map((a) => a.id)} cubeStateRef={cubeStateRef} />
+          )}
 
           {/* HUD chips */}
           {isActive && !qrOpen && has3D && selectedProduct && (
