@@ -39,16 +39,6 @@ const KioskCanvas = dynamic(
   },
 )
 
-/** Portrait-only: pin the two top chips to opposite top corners of the hero
- *  area. (A previous fixed ±320px nudge only worked for elongated models — on
- *  compact ones the cube corners project near centre, so the nudge flung the
- *  chips mid-screen instead of seating them in the corners.) X is pinned to the
- *  edge; Y still tracks the cube corner (clamped to the hero). See HudChip.pinX. */
-const PORTRAIT_PIN_X: Record<string, 'left' | 'right'> = {
-  designation: 'right',
-  type: 'left',
-}
-
 export function KioskPortrait({
   activeCategory,
   setActiveCategory,
@@ -91,10 +81,11 @@ export function KioskPortrait({
     setSelectedProductId(filteredProducts[next].id)
   }
 
-  // HUD chip state. In the narrow portrait viewport the two TOP chips
-  // (DESIGNATION right, TYPE left) project too close to the centre and overlap,
-  // so we PIN them to opposite top corners of the hero (pinX); their Y still
-  // tracks the cube corner. The two bottom chips keep riding the cube.
+  // HUD chips ride the cube corners directly, same as landscape. (A previous
+  // portrait-only ±320px nudge on the two top chips was meant to spread them,
+  // but it only worked for elongated models — on compact ones the cube projects
+  // small and centred, so the fixed nudge flung the chips mid-screen and they
+  // scattered. Plain corner-tracking keeps every chip on its cube corner.)
   const chipValues = selectedProduct ? pickChipValues(selectedProduct) : []
   const hudAnchors: HudAnchor[] = HUD_ANCHOR_POSITIONS.map((anchor, i) => ({
     id: anchor.id,
@@ -102,7 +93,6 @@ export function KioskPortrait({
     label: chipValues[i]?.label ?? '',
     value: chipValues[i]?.value ?? '',
     align: anchor.align,
-    pinX: PORTRAIT_PIN_X[anchor.id],
     delay: anchor.delay,
     chipOffset: anchor.chipOffset,
   }))
@@ -261,7 +251,6 @@ export function KioskPortrait({
                 label={anchor.label}
                 value={anchor.value}
                 align={anchor.align}
-                pinX={anchor.pinX}
                 delay={anchor.delay}
                 chipOffset={anchor.chipOffset}
                 anchorStateRef={anchorStateRef}

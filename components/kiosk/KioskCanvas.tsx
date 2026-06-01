@@ -52,8 +52,6 @@ export interface HudAnchor {
   label: string
   value: string
   align: 'left' | 'right'
-  /** Portrait only: pin the chip's X to a container edge (see HudChip.pinX). */
-  pinX?: 'left' | 'right'
   delay: number
   chipOffset: { x: number; y: number }
 }
