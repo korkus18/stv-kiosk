@@ -73,11 +73,11 @@ interface KioskCanvasProps {
   onModelError?: (url: string) => void
   /** Next model the attract loop will show — prefetched for a seamless swap. */
   prefetchUrl?: string
-  /** Attract gate: play the slow explode→hold→reassemble flourish on THIS model
-   *  before crossfading on (only if it's also explodable). Default false. */
+  /** @deprecated No longer gates anything — every attract model now does the
+   *  360° turn (+ explode if explodable). Kept for back-compat with callers. */
   attractExplode?: boolean
-  /** Attract: current model's on-screen sequence (load → optional flourish →
-   *  dwell) finished — the loop should crossfade to the next model. */
+  /** Attract: current model's on-screen sequence (load → 360° flourish → dwell)
+   *  finished — the loop should crossfade to the next model. */
   onAttractAdvance?: () => void
   /** Default model rest pose (Euler degrees [x,y,z]); absent = auto. */
   modelRotation?: [number, number, number]
@@ -107,20 +107,28 @@ const RESUME_DELAY_MS = 2800
 /** Ignore interaction this long after a flourish starts (the activating tap). */
 const FLOURISH_GRACE_MS = 320
 
-/** Attract idle flourish (gated models): slow explode → hold → reassemble, all
- *  under the continuous slow auto-rotate. Distinct from the fast attract→active
- *  reveal flourish above; shares the same explode progress mechanism. */
+/** Attract idle flourish: every freshly-arrived attract model does ONE full 360°
+ *  turn, and — if it's explodable — explodes out → holds → reassembles IN SYNC
+ *  with that turn (explode fully open near the half-turn, back together as the
+ *  turn completes). Non-explodable models just do the 360° spin. The turn and the
+ *  explode share one clock (ATTRACT_FLOURISH_MS), so they always line up.
+ *  Distinct from the fast attract→active reveal flourish above. */
 /** Let a freshly-arrived model settle (its materialise fade-in finishes) and
  *  read for a beat before the flourish begins. */
 const ATTRACT_SETTLE_MS = 600
-const ATTRACT_EXPLODE_MS = 800
-const ATTRACT_HOLD_MS = 600
-const ATTRACT_ASSEMBLE_MS = 800
+/** Explode-out / hold-open / reassemble splits of the flourish. Sum =
+ *  ATTRACT_FLOURISH_MS, tuned so the model is fully exploded around the half
+ *  turn and back together as the 360° completes (~4 s on screen per model). */
+const ATTRACT_EXPLODE_MS = 1500
+const ATTRACT_HOLD_MS = 500
+const ATTRACT_ASSEMBLE_MS = 1500
 const ATTRACT_FLOURISH_MS = ATTRACT_EXPLODE_MS + ATTRACT_HOLD_MS + ATTRACT_ASSEMBLE_MS
+/** Peak spin (rad/s) of the attract flourish. A sin(πt) bell over the flourish
+ *  integrates to exactly 2π → precisely one full turn, accelerating in and
+ *  easing out so it blends with the surrounding slow idle spin. */
+const ATTRACT_SPIN_PEAK = (Math.PI * Math.PI) / (ATTRACT_FLOURISH_MS / 1000)
 /** Quiet dwell after the flourish reassembles, before the crossfade to next. */
-const ATTRACT_POST_FLOURISH_MS = 1400
-/** Dwell for non-flourish models (just slow rotation), before the crossfade. */
-const ATTRACT_PLAIN_DWELL_MS = 5200
+const ATTRACT_POST_FLOURISH_MS = 700
 /** Safety: advance even if a model never reports ready (hung/slow/broken load),
  *  so the loop can never stall waiting on one model. */
 const ATTRACT_WATCHDOG_MS = 12000
@@ -858,6 +866,16 @@ function ModelMotion({ modelGroupRef, attract, motionRef, calibrate }: ModelMoti
       return
     }
 
+    if (m.attractFlourishActive) {
+      // Attract idle flourish: a sin(πt) bell over the flourish → exactly one
+      // full 360° turn, synced with the explode (GltfModel runs on the same
+      // clock). Accelerates in, eases out, blending with the slow idle spin.
+      const t = Math.min(1, (now - m.attractFlourishStart) / ATTRACT_FLOURISH_MS)
+      speed.current = ATTRACT_SPIN_PEAK * Math.sin(Math.PI * t)
+      g.rotation.y += speed.current * delta
+      return
+    }
+
     let target: number
     if (attract) {
       target = IDLE_SPIN
@@ -905,7 +923,6 @@ export function KioskCanvas({
   attract = false,
   onModelError,
   prefetchUrl,
-  attractExplode = false,
   onAttractAdvance,
   modelRotation,
   exploded = false,
@@ -993,19 +1010,16 @@ export function KioskCanvas({
   // Attract loop sequencing. `modelReady` flips true once the active model has
   // loaded + been measured (GltfModel reports explodable at the end of its fit
   // pass — the precise "loaded, not half-loaded" signal, tied to the loading
-  // skeleton handoff). explodableRef rides along so the gate can read it without
-  // a render. Latest gate / advance callback are held in refs so the sequence
-  // effect doesn't restart when only those change.
+  // skeleton handoff). The advance callback is held in a ref so the sequence
+  // effect doesn't restart when only it changes. (The `attractExplode` prop is
+  // no longer read — every model now flourishes; kept on the interface for
+  // back-compat.)
   const [modelReady, setModelReady] = useState(false)
-  const explodableRef = useRef(false)
-  const attractExplodeRef = useRef(attractExplode)
-  attractExplodeRef.current = attractExplode
   const onAttractAdvanceRef = useRef(onAttractAdvance)
   onAttractAdvanceRef.current = onAttractAdvance
 
   const handleExplodable = useCallback(
     (explodable: boolean) => {
-      explodableRef.current = explodable
       setModelReady(true)
       onExplodableChange?.(explodable)
     },
@@ -1101,32 +1115,27 @@ export function KioskCanvas({
       return clearAll
     }
 
-    // Arrived. Gate the flourish on the per-model flag AND real explodability;
-    // everything else just rotates for the dwell (graceful degrade).
-    const doFlourish = attractExplodeRef.current && explodableRef.current
-    if (doFlourish) {
-      timers.push(
-        setTimeout(() => {
-          m.attractFlourishActive = true
-          m.attractFlourishStart = performance.now()
-        }, ATTRACT_SETTLE_MS),
-      )
-      timers.push(
-        setTimeout(() => {
-          m.attractFlourishActive = false
-        }, ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS),
-      )
-      timers.push(
-        setTimeout(
-          () => onAttractAdvanceRef.current?.(),
-          ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS + ATTRACT_POST_FLOURISH_MS,
-        ),
-      )
-    } else {
-      timers.push(
-        setTimeout(() => onAttractAdvanceRef.current?.(), ATTRACT_PLAIN_DWELL_MS),
-      )
-    }
+    // Arrived. EVERY model now does one 360° flourish turn. Explodable models
+    // explode→reassemble in sync (GltfModel runs the explode only when it has
+    // parts, i.e. `st`); non-explodable ones just spin a full turn. The per-model
+    // `attractExplode` flag is no longer a gate — the loop is uniformly lively.
+    timers.push(
+      setTimeout(() => {
+        m.attractFlourishActive = true
+        m.attractFlourishStart = performance.now()
+      }, ATTRACT_SETTLE_MS),
+    )
+    timers.push(
+      setTimeout(() => {
+        m.attractFlourishActive = false
+      }, ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS),
+    )
+    timers.push(
+      setTimeout(
+        () => onAttractAdvanceRef.current?.(),
+        ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS + ATTRACT_POST_FLOURISH_MS,
+      ),
+    )
     return clearAll
   }, [attract, modelReady, opacity, activeUrl, calibrating])
 
