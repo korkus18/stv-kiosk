@@ -107,28 +107,24 @@ const RESUME_DELAY_MS = 2800
 /** Ignore interaction this long after a flourish starts (the activating tap). */
 const FLOURISH_GRACE_MS = 320
 
-/** Attract idle flourish: every freshly-arrived attract model does ONE full 360°
- *  turn, and — if it's explodable — explodes out → holds → reassembles IN SYNC
- *  with that turn (explode fully open near the half-turn, back together as the
- *  turn completes). Non-explodable models just do the 360° spin. The turn and the
- *  explode share one clock (ATTRACT_FLOURISH_MS), so they always line up.
- *  Distinct from the fast attract→active reveal flourish above. */
-/** Let a freshly-arrived model settle (its materialise fade-in finishes) and
- *  read for a beat before the flourish begins. */
-const ATTRACT_SETTLE_MS = 600
-/** Explode-out / hold-open / reassemble splits of the flourish. Sum =
- *  ATTRACT_FLOURISH_MS, tuned so the model is fully exploded around the half
- *  turn and back together as the 360° completes (~4 s on screen per model). */
-const ATTRACT_EXPLODE_MS = 1500
-const ATTRACT_HOLD_MS = 500
-const ATTRACT_ASSEMBLE_MS = 1500
-const ATTRACT_FLOURISH_MS = ATTRACT_EXPLODE_MS + ATTRACT_HOLD_MS + ATTRACT_ASSEMBLE_MS
-/** Peak spin (rad/s) of the attract flourish. A sin(πt) bell over the flourish
+/** Attract lifecycle — each model plays a continuous, fade-free loop:
+ *    1. ASSEMBLE — model arrives fully exploded; its parts fly together into the
+ *       assembled shape (reverse explode).
+ *    2. SPIN — assembled, it turns exactly one full 360° (sin(πt) bell → 2π).
+ *    3. DISASSEMBLE — parts fly back apart; this IS the exit (no crossfade) —
+ *       at full explode the model swaps and the next one assembles in.
+ *  All three run off one clock (attractFlourishStart); GltfModel reads the
+ *  explode phase, ModelMotion reads the spin window. Non-explodable models have
+ *  no parts, so they just hold + do the 360° turn. */
+const ATTRACT_ASSEMBLE_MS = 950
+const ATTRACT_SPIN_MS = 2600
+const ATTRACT_DISASSEMBLE_MS = 950
+const ATTRACT_LIFECYCLE_MS =
+  ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS + ATTRACT_DISASSEMBLE_MS
+/** Peak spin (rad/s) of the 360° turn. A sin(πt) bell over the spin window
  *  integrates to exactly 2π → precisely one full turn, accelerating in and
- *  easing out so it blends with the surrounding slow idle spin. */
-const ATTRACT_SPIN_PEAK = (Math.PI * Math.PI) / (ATTRACT_FLOURISH_MS / 1000)
-/** Quiet dwell after the flourish reassembles, before the crossfade to next. */
-const ATTRACT_POST_FLOURISH_MS = 700
+ *  easing out. */
+const ATTRACT_SPIN_PEAK = (Math.PI * Math.PI) / (ATTRACT_SPIN_MS / 1000)
 /** Safety: advance even if a model never reports ready (hung/slow/broken load),
  *  so the loop can never stall waiting on one model. */
 const ATTRACT_WATCHDOG_MS = 12000
@@ -216,6 +212,7 @@ function GltfModel({
   url,
   fitZRef,
   modelGroupRef,
+  attract = false,
   exploded = false,
   explodeConfig,
   onExplodableChange,
@@ -227,6 +224,8 @@ function GltfModel({
   url: string
   fitZRef: React.MutableRefObject<number>
   modelGroupRef: React.RefObject<THREE.Group | null>
+  /** Attract: the model arrives fully exploded and assembles in (no fade). */
+  attract?: boolean
   exploded?: boolean
   explodeConfig?: ExplodeField
   onExplodableChange?: (explodable: boolean) => void
@@ -252,6 +251,8 @@ function GltfModel({
   const materializeRef = useRef(0)
   const explodedRef = useRef(exploded)
   explodedRef.current = exploded
+  const attractRef = useRef(attract)
+  attractRef.current = attract
   const controls = useThree((s) => s.controls) as unknown as {
     minDistance: number
     maxDistance: number
@@ -406,31 +407,40 @@ function GltfModel({
     }
     const state = cache[EXPLODE_DATA]
     explodeRef.current = state
-    progressRef.current = 0
+    // Attract: an explodable model arrives FULLY EXPLODED (progress 1) so its
+    // parts can fly together (assemble-in) — no materialise fade. Active (and
+    // non-explodable attract) start assembled with the fade-in handoff.
+    const attractAssembleIn = attractRef.current && state !== null
+    progressRef.current = attractAssembleIn ? 1 : 0
     onExplodableChange?.(state !== null)
 
-    // Materialise fade-in: start every (re)mount fully transparent; useFrame
-    // ramps opacity back to each material's original over ~0.45s. The original
-    // opacity/transparent are stashed once per material so the restore is exact.
-    materializeRef.current = 0
-    scene.traverse((o) => {
-      const m = o as THREE.Mesh
-      if (!m.isMesh) return
-      const mats = Array.isArray(m.material) ? m.material : [m.material]
-      for (const mat of mats) {
-        if (!mat) continue
-        const rec = mat as THREE.Material & {
-          __origOpacity?: number
-          __origTransparent?: boolean
+    if (attractAssembleIn) {
+      // No opacity fade — the parts-fly-together motion is the reveal.
+      materializeRef.current = 1
+    } else {
+      // Materialise fade-in: start fully transparent; useFrame ramps opacity back
+      // to each material's original over ~0.45s. Original opacity/transparent are
+      // stashed once per material so the restore is exact.
+      materializeRef.current = 0
+      scene.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        const mats = Array.isArray(m.material) ? m.material : [m.material]
+        for (const mat of mats) {
+          if (!mat) continue
+          const rec = mat as THREE.Material & {
+            __origOpacity?: number
+            __origTransparent?: boolean
+          }
+          if (rec.__origOpacity === undefined) {
+            rec.__origOpacity = rec.opacity
+            rec.__origTransparent = rec.transparent
+          }
+          rec.transparent = true
+          rec.opacity = 0
         }
-        if (rec.__origOpacity === undefined) {
-          rec.__origOpacity = rec.opacity
-          rec.__origTransparent = rec.transparent
-        }
-        rec.transparent = true
-        rec.opacity = 0
-      }
-    })
+      })
+    }
 
     // Restore the live auto-spin we neutralised for measurement.
     if (group && savedRot) {
@@ -533,20 +543,22 @@ function GltfModel({
       progressRef.current +=
         (target - progressRef.current) * Math.min(1, delta * 12)
     } else if (m.attractFlourishActive && st) {
-      // Attract idle flourish: slow explode → hold → reassemble (the spin keeps
-      // running, owned by ModelMotion). Eased target, gently smoothed.
+      // Attract lifecycle explode: assemble-in (parts fly together) → hold while
+      // the 360° turn runs (ModelMotion) → disassemble-out (parts fly apart = the
+      // exit). progress: 1 → 0 → 0 → 1. Eased target, gently smoothed.
       const e = performance.now() - m.attractFlourishStart
       let target: number
-      if (e < ATTRACT_EXPLODE_MS) {
-        target = easeInOut(e / ATTRACT_EXPLODE_MS)
-      } else if (e < ATTRACT_EXPLODE_MS + ATTRACT_HOLD_MS) {
-        target = 1
+      if (e < ATTRACT_ASSEMBLE_MS) {
+        target = 1 - easeInOut(e / ATTRACT_ASSEMBLE_MS)
+      } else if (e < ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS) {
+        target = 0
       } else {
-        const a = (e - ATTRACT_EXPLODE_MS - ATTRACT_HOLD_MS) / ATTRACT_ASSEMBLE_MS
-        target = 1 - easeInOut(Math.min(1, a))
+        const a =
+          (e - ATTRACT_ASSEMBLE_MS - ATTRACT_SPIN_MS) / ATTRACT_DISASSEMBLE_MS
+        target = easeInOut(Math.min(1, a))
       }
       progressRef.current +=
-        (target - progressRef.current) * Math.min(1, delta * 8)
+        (target - progressRef.current) * Math.min(1, delta * 10)
     } else {
       const target = explodedRef.current ? 1 : 0
       progressRef.current +=
@@ -867,12 +879,20 @@ function ModelMotion({ modelGroupRef, attract, motionRef, calibrate }: ModelMoti
     }
 
     if (m.attractFlourishActive) {
-      // Attract idle flourish: a sin(πt) bell over the flourish → exactly one
-      // full 360° turn, synced with the explode (GltfModel runs on the same
-      // clock). Accelerates in, eases out, blending with the slow idle spin.
-      const t = Math.min(1, (now - m.attractFlourishStart) / ATTRACT_FLOURISH_MS)
-      speed.current = ATTRACT_SPIN_PEAK * Math.sin(Math.PI * t)
-      g.rotation.y += speed.current * delta
+      // Attract lifecycle: spin ONLY during the middle window (assembled), and
+      // there do exactly one 360° turn — a sin(πt) bell integrates to 2π. While
+      // the parts fly together (assemble) / apart (disassemble) the model holds
+      // still so the motion reads clearly.
+      const e = now - m.attractFlourishStart
+      const spinStart = ATTRACT_ASSEMBLE_MS
+      const spinEnd = ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS
+      if (e >= spinStart && e < spinEnd) {
+        const t = (e - spinStart) / ATTRACT_SPIN_MS
+        speed.current = ATTRACT_SPIN_PEAK * Math.sin(Math.PI * t)
+        g.rotation.y += speed.current * delta
+      } else {
+        speed.current = 0
+      }
       return
     }
 
@@ -1070,22 +1090,29 @@ export function KioskCanvas({
   const onZoomOut = () => dolly(1.22)
   const onResetView = () => orbitControlsRef.current?.reset()
 
-  // Crossfade: when the model url changes, fade the canvas out to the bg, swap
-  // the model while invisible (it's been prefetched by the attract loop), then
-  // fade back in. One WebGL context, no double-mount.
+  // Model swap. ACTIVE (user switching products): crossfade — fade out to bg,
+  // swap while invisible (prefetched), fade back in. ATTRACT: NO fade — the swap
+  // is hidden by the explode lifecycle (old model just disassembled to bits, new
+  // one starts exploded and assembles in), so we swap instantly and stay opaque.
+  // One WebGL context, no double-mount either way.
   const [activeUrl, setActiveUrl] = useState(modelUrl)
   const [opacity, setOpacity] = useState(1)
   useEffect(() => {
     if (modelUrl === activeUrl) return
-    setOpacity(0)
     // A new model is incoming — it's not "ready" until it loads + measures.
     setModelReady(false)
+    if (attract) {
+      setActiveUrl(modelUrl)
+      setOpacity(1)
+      return
+    }
+    setOpacity(0)
     const t = setTimeout(() => {
       setActiveUrl(modelUrl)
       setOpacity(1)
     }, CROSSFADE_HALF_MS)
     return () => clearTimeout(t)
-  }, [modelUrl, activeUrl])
+  }, [modelUrl, activeUrl, attract])
 
   // Attract per-model sequence: once the active model has loaded + faded in
   // (modelReady && opacity === 1), let it settle, then — if it's gated AND
@@ -1115,26 +1142,17 @@ export function KioskCanvas({
       return clearAll
     }
 
-    // Arrived. EVERY model now does one 360° flourish turn. Explodable models
-    // explode→reassemble in sync (GltfModel runs the explode only when it has
-    // parts, i.e. `st`); non-explodable ones just spin a full turn. The per-model
-    // `attractExplode` flag is no longer a gate — the loop is uniformly lively.
-    timers.push(
-      setTimeout(() => {
-        m.attractFlourishActive = true
-        m.attractFlourishStart = performance.now()
-      }, ATTRACT_SETTLE_MS),
-    )
+    // Arrived (fully exploded for explodable models). Run the lifecycle:
+    // assemble-in → 360° turn → disassemble-out, then advance IMMEDIATELY — the
+    // disassemble IS the exit, so the next model assembles in with no fade or
+    // dwell. Explodable models fly their parts; non-explodable ones hold + turn.
+    m.attractFlourishActive = true
+    m.attractFlourishStart = performance.now()
     timers.push(
       setTimeout(() => {
         m.attractFlourishActive = false
-      }, ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS),
-    )
-    timers.push(
-      setTimeout(
-        () => onAttractAdvanceRef.current?.(),
-        ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS + ATTRACT_POST_FLOURISH_MS,
-      ),
+        onAttractAdvanceRef.current?.()
+      }, ATTRACT_LIFECYCLE_MS),
     )
     return clearAll
   }, [attract, modelReady, opacity, activeUrl, calibrating])
@@ -1215,6 +1233,7 @@ export function KioskCanvas({
                 url={activeUrl}
                 fitZRef={fitZRef}
                 modelGroupRef={modelGroupRef}
+                attract={attract}
                 exploded={exploded}
                 explodeConfig={explodeConfig}
                 onExplodableChange={handleExplodable}
