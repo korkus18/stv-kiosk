@@ -208,6 +208,30 @@ class ModelErrorBoundary extends Component<
   }
 }
 
+/** Scale every mesh material's opacity to `k` (0..1) relative to its stashed
+ *  original (captured on first call), toggling `transparent` as needed. Drives
+ *  the attract dissolve so model swaps land while fully invisible. */
+function setModelOpacity(scene: THREE.Object3D, k: number) {
+  scene.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh) return
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const mat of mats) {
+      if (!mat) continue
+      const rec = mat as THREE.Material & {
+        __origOpacity?: number
+        __origTransparent?: boolean
+      }
+      if (rec.__origOpacity === undefined) {
+        rec.__origOpacity = rec.opacity
+        rec.__origTransparent = rec.transparent
+      }
+      rec.opacity = rec.__origOpacity * k
+      rec.transparent = k < 0.999 ? true : rec.__origTransparent ?? false
+    }
+  })
+}
+
 function GltfModel({
   url,
   fitZRef,
@@ -253,6 +277,9 @@ function GltfModel({
   explodedRef.current = exploded
   const attractRef = useRef(attract)
   attractRef.current = attract
+  /** True while the attract opacity fade is driving the materials, so we know to
+   *  restore full opacity exactly once when the lifecycle ends (e.g. on tap). */
+  const attractFadeRef = useRef(false)
   const controls = useThree((s) => s.controls) as unknown as {
     minDistance: number
     maxDistance: number
@@ -408,39 +435,35 @@ function GltfModel({
     const state = cache[EXPLODE_DATA]
     explodeRef.current = state
     // Attract: an explodable model arrives FULLY EXPLODED (progress 1) so its
-    // parts can fly together (assemble-in) — no materialise fade. Active (and
-    // non-explodable attract) start assembled with the fade-in handoff.
+    // parts can fly together (assemble-in). Active (and non-explodable attract)
+    // start assembled.
     const attractAssembleIn = attractRef.current && state !== null
     progressRef.current = attractAssembleIn ? 1 : 0
     onExplodableChange?.(state !== null)
 
-    if (attractAssembleIn) {
-      // No opacity fade — the parts-fly-together motion is the reveal.
-      materializeRef.current = 1
-    } else {
-      // Materialise fade-in: start fully transparent; useFrame ramps opacity back
-      // to each material's original over ~0.45s. Original opacity/transparent are
-      // stashed once per material so the restore is exact.
-      materializeRef.current = 0
-      scene.traverse((o) => {
-        const m = o as THREE.Mesh
-        if (!m.isMesh) return
-        const mats = Array.isArray(m.material) ? m.material : [m.material]
-        for (const mat of mats) {
-          if (!mat) continue
-          const rec = mat as THREE.Material & {
-            __origOpacity?: number
-            __origTransparent?: boolean
-          }
-          if (rec.__origOpacity === undefined) {
-            rec.__origOpacity = rec.opacity
-            rec.__origTransparent = rec.transparent
-          }
-          rec.transparent = true
-          rec.opacity = 0
+    // Start every (re)mount fully transparent (stashing each material's original
+    // opacity/transparent once). Who ramps it back: in ATTRACT, the attract fade
+    // owns opacity for EVERY model (explodable or not) so it tracks the lifecycle
+    // and swaps land invisibly; in ACTIVE, the materialise fade-in (~0.45 s).
+    materializeRef.current = attractRef.current ? 1 : 0
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      const mats = Array.isArray(m.material) ? m.material : [m.material]
+      for (const mat of mats) {
+        if (!mat) continue
+        const rec = mat as THREE.Material & {
+          __origOpacity?: number
+          __origTransparent?: boolean
         }
-      })
-    }
+        if (rec.__origOpacity === undefined) {
+          rec.__origOpacity = rec.opacity
+          rec.__origTransparent = rec.transparent
+        }
+        rec.transparent = true
+        rec.opacity = 0
+      }
+    })
 
     // Restore the live auto-spin we neutralised for measurement.
     if (group && savedRot) {
@@ -601,6 +624,34 @@ function GltfModel({
           }
         }
       })
+    }
+
+    // Attract opacity fade — tie material opacity to the assemble/disassemble so
+    // model swaps happen while invisible (opacity 0), softening the hand-off into
+    // a smooth dissolve rather than a hard cut. Fades IN over the first part of
+    // assemble, holds opaque through the spin, fades OUT over the last part of
+    // disassemble. On lifecycle end (e.g. user taps → reveal flourish) opacity is
+    // restored to each material's original exactly once.
+    const inAttractFade = attractRef.current && m.attractFlourishActive
+    if (inAttractFade) {
+      const e = performance.now() - m.attractFlourishStart
+      let k: number
+      if (e < ATTRACT_ASSEMBLE_MS) {
+        k = Math.min(1, e / (ATTRACT_ASSEMBLE_MS * 0.6))
+      } else if (e < ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS) {
+        k = 1
+      } else {
+        const d = (e - ATTRACT_ASSEMBLE_MS - ATTRACT_SPIN_MS) / ATTRACT_DISASSEMBLE_MS
+        k = 1 - Math.min(1, Math.max(0, (d - 0.4) / 0.6))
+      }
+      setModelOpacity(scene, k)
+      attractFadeRef.current = true
+    } else if (attractFadeRef.current && !attractRef.current) {
+      // Left attract entirely (user tapped → active): restore full opacity once.
+      // At a NORMAL cycle end attract stays true and the model swaps while still
+      // invisible, so we deliberately leave opacity near 0 (no pre-swap flash).
+      setModelOpacity(scene, 1)
+      attractFadeRef.current = false
     }
   })
 
