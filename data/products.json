@@ -363,7 +363,7 @@
       "Fuze": "MRV-U or equivalent AU-32",
       "NEQ (kg)": "427,2"
     },
-    "model3D": "/models/rocket_122mm_he_grad/122_GRAD.gltf",
+    "model3D": "/models/rocket_122mm_he_grad/122_GRAD.glb",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/raketa-122-mm-grad"
@@ -397,7 +397,7 @@
       "Propellant weight (kg)": "~8,1",
       "Primer screw": "KV-4; KW-13; KV-13U"
     },
-    "model3D": "/models/round_152mm_he_full/152_full.gltf",
+    "model3D": "/models/round_152mm_he_full/152_full.glb",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/152-mm"
@@ -432,7 +432,7 @@
       "Primer screw": "KV-4; KW-13; KV-13U",
       "NEQ (kg)": "~146"
     },
-    "model3D": "/models/round_122mm_he_full/122_mm_HE.gltf",
+    "model3D": "/models/round_122mm_he_full/122_mm_HE.glb",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/naboj-122-mm-he-pro-kanon-d-30-nebo-samohybnou-houfnici-2s1-gvozdika"
@@ -483,7 +483,7 @@
       "Ignition charge powder weight (g)": "9,3±0,1",
       "NEQ (kg)": "57"
     },
-    "model3D": "/models/pg_7vm/PG_7VM.gltf",
+    "model3D": "/models/pg_7vm/PG_7VM.glb",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
@@ -529,7 +529,7 @@
       "Ignition charge powder weight (g)": "9,3±0,1",
       "NEQ (kg)": "27"
     },
-    "model3D": "/models/pg_7vm_practice_t/PG-7VM-PRACTICE-T.gltf",
+    "model3D": "/models/pg_7vm_practice_t/PG-7VM-PRACTICE-T.glb",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
@@ -578,7 +578,7 @@
       "NEQ (kg)": "5,5",
       "NEQ (kg);": "82,5"
     },
-    "model3D": "/models/tb_7vm/TB_7VM.gltf",
+    "model3D": "/models/tb_7vm/TB_7VM.glb",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
@@ -678,7 +678,7 @@
       "Certification": "CIP",
       "Application": "Law enforcement, training"
     },
-    "model3D": "/models/scorpio_9mm_luger_fmj_75g/Flyer_Scorpio_9mm_Luger_FMJ_75g.gltf",
+    "model3D": "/models/scorpio_9mm_luger_fmj_75g/Flyer_Scorpio_9mm_Luger_FMJ_75g.glb",
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-9-mm-luger-cz"

@@ -73,11 +73,11 @@ interface KioskCanvasProps {
   onModelError?: (url: string) => void
   /** Next model the attract loop will show — prefetched for a seamless swap. */
   prefetchUrl?: string
-  /** Attract gate: play the slow explode→hold→reassemble flourish on THIS model
-   *  before crossfading on (only if it's also explodable). Default false. */
+  /** @deprecated No longer gates anything — every attract model now does the
+   *  360° turn (+ explode if explodable). Kept for back-compat with callers. */
   attractExplode?: boolean
-  /** Attract: current model's on-screen sequence (load → optional flourish →
-   *  dwell) finished — the loop should crossfade to the next model. */
+  /** Attract: current model's on-screen sequence (load → 360° flourish → dwell)
+   *  finished — the loop should crossfade to the next model. */
   onAttractAdvance?: () => void
   /** Default model rest pose (Euler degrees [x,y,z]); absent = auto. */
   modelRotation?: [number, number, number]
@@ -107,20 +107,24 @@ const RESUME_DELAY_MS = 2800
 /** Ignore interaction this long after a flourish starts (the activating tap). */
 const FLOURISH_GRACE_MS = 320
 
-/** Attract idle flourish (gated models): slow explode → hold → reassemble, all
- *  under the continuous slow auto-rotate. Distinct from the fast attract→active
- *  reveal flourish above; shares the same explode progress mechanism. */
-/** Let a freshly-arrived model settle (its materialise fade-in finishes) and
- *  read for a beat before the flourish begins. */
-const ATTRACT_SETTLE_MS = 600
-const ATTRACT_EXPLODE_MS = 800
-const ATTRACT_HOLD_MS = 600
-const ATTRACT_ASSEMBLE_MS = 800
-const ATTRACT_FLOURISH_MS = ATTRACT_EXPLODE_MS + ATTRACT_HOLD_MS + ATTRACT_ASSEMBLE_MS
-/** Quiet dwell after the flourish reassembles, before the crossfade to next. */
-const ATTRACT_POST_FLOURISH_MS = 1400
-/** Dwell for non-flourish models (just slow rotation), before the crossfade. */
-const ATTRACT_PLAIN_DWELL_MS = 5200
+/** Attract lifecycle — each model plays a continuous, fade-free loop:
+ *    1. ASSEMBLE — model arrives fully exploded; its parts fly together into the
+ *       assembled shape (reverse explode).
+ *    2. SPIN — assembled, it turns exactly one full 360° (sin(πt) bell → 2π).
+ *    3. DISASSEMBLE — parts fly back apart; this IS the exit (no crossfade) —
+ *       at full explode the model swaps and the next one assembles in.
+ *  All three run off one clock (attractFlourishStart); GltfModel reads the
+ *  explode phase, ModelMotion reads the spin window. Non-explodable models have
+ *  no parts, so they just hold + do the 360° turn. */
+const ATTRACT_ASSEMBLE_MS = 950
+const ATTRACT_SPIN_MS = 2600
+const ATTRACT_DISASSEMBLE_MS = 950
+const ATTRACT_LIFECYCLE_MS =
+  ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS + ATTRACT_DISASSEMBLE_MS
+/** Peak spin (rad/s) of the 360° turn. A sin(πt) bell over the spin window
+ *  integrates to exactly 2π → precisely one full turn, accelerating in and
+ *  easing out. */
+const ATTRACT_SPIN_PEAK = (Math.PI * Math.PI) / (ATTRACT_SPIN_MS / 1000)
 /** Safety: advance even if a model never reports ready (hung/slow/broken load),
  *  so the loop can never stall waiting on one model. */
 const ATTRACT_WATCHDOG_MS = 12000
@@ -158,6 +162,10 @@ interface OrbitControlsLike {
 }
 
 const TARGET_MAX_DIM = 0.88
+// Fraction of the frame the model's bounding sphere fills at the full (active)
+// fit — lower = camera pushed back = model occupies less of the screen. Applies
+// uniformly to every model in BOTH modes (attract scales this by ATTRACT_FIT).
+const FRAME_FILL = 0.62
 // Attract framing relative to the full active fit (<1 = closer/bigger). Tighter
 // than active so the lone model dominates the frame (magnet from a distance);
 // the aspect-aware fit keeps it fully visible with margin in both orientations.
@@ -204,10 +212,35 @@ class ModelErrorBoundary extends Component<
   }
 }
 
+/** Scale every mesh material's opacity to `k` (0..1) relative to its stashed
+ *  original (captured on first call), toggling `transparent` as needed. Drives
+ *  the attract dissolve so model swaps land while fully invisible. */
+function setModelOpacity(scene: THREE.Object3D, k: number) {
+  scene.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh) return
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const mat of mats) {
+      if (!mat) continue
+      const rec = mat as THREE.Material & {
+        __origOpacity?: number
+        __origTransparent?: boolean
+      }
+      if (rec.__origOpacity === undefined) {
+        rec.__origOpacity = rec.opacity
+        rec.__origTransparent = rec.transparent
+      }
+      rec.opacity = rec.__origOpacity * k
+      rec.transparent = k < 0.999 ? true : rec.__origTransparent ?? false
+    }
+  })
+}
+
 function GltfModel({
   url,
   fitZRef,
   modelGroupRef,
+  attract = false,
   exploded = false,
   explodeConfig,
   onExplodableChange,
@@ -219,6 +252,8 @@ function GltfModel({
   url: string
   fitZRef: React.MutableRefObject<number>
   modelGroupRef: React.RefObject<THREE.Group | null>
+  /** Attract: the model arrives fully exploded and assembles in (no fade). */
+  attract?: boolean
   exploded?: boolean
   explodeConfig?: ExplodeField
   onExplodableChange?: (explodable: boolean) => void
@@ -244,6 +279,11 @@ function GltfModel({
   const materializeRef = useRef(0)
   const explodedRef = useRef(exploded)
   explodedRef.current = exploded
+  const attractRef = useRef(attract)
+  attractRef.current = attract
+  /** True while the attract opacity fade is driving the materials, so we know to
+   *  restore full opacity exactly once when the lifecycle ends (e.g. on tap). */
+  const attractFadeRef = useRef(false)
   const controls = useThree((s) => s.controls) as unknown as {
     minDistance: number
     maxDistance: number
@@ -360,14 +400,14 @@ function GltfModel({
     const persp = camera as THREE.PerspectiveCamera
     const fov = persp.fov ?? 30
 
-    // Aspect-aware: fit the sphere to BOTH FOV axes (margin via 0.8) and take the
+    // Aspect-aware: fit the sphere to BOTH FOV axes (margin via FRAME_FILL) and take the
     // farther distance. Landscape → vertical term wins; narrow portrait → the
     // horizontal term wins, so wide/long models don't overflow the side edges.
     const vHalf = (fov * Math.PI) / 360
     const aspect = size.width / Math.max(size.height, 1)
     const hHalf = Math.atan(Math.tan(vHalf) * aspect)
-    const fitV = diag / (2 * Math.tan(vHalf) * 0.8)
-    const fitH = diag / (2 * Math.tan(hHalf) * 0.8)
+    const fitV = diag / (2 * Math.tan(vHalf) * FRAME_FILL)
+    const fitH = diag / (2 * Math.tan(hHalf) * FRAME_FILL)
     const fitZ = Math.max(fitV, fitH)
 
     persp.near = Math.max(fitZ / 1000, 0.01)
@@ -398,13 +438,18 @@ function GltfModel({
     }
     const state = cache[EXPLODE_DATA]
     explodeRef.current = state
-    progressRef.current = 0
+    // Attract: an explodable model arrives FULLY EXPLODED (progress 1) so its
+    // parts can fly together (assemble-in). Active (and non-explodable attract)
+    // start assembled.
+    const attractAssembleIn = attractRef.current && state !== null
+    progressRef.current = attractAssembleIn ? 1 : 0
     onExplodableChange?.(state !== null)
 
-    // Materialise fade-in: start every (re)mount fully transparent; useFrame
-    // ramps opacity back to each material's original over ~0.45s. The original
-    // opacity/transparent are stashed once per material so the restore is exact.
-    materializeRef.current = 0
+    // Start every (re)mount fully transparent (stashing each material's original
+    // opacity/transparent once). Who ramps it back: in ATTRACT, the attract fade
+    // owns opacity for EVERY model (explodable or not) so it tracks the lifecycle
+    // and swaps land invisibly; in ACTIVE, the materialise fade-in (~0.45 s).
+    materializeRef.current = attractRef.current ? 1 : 0
     scene.traverse((o) => {
       const m = o as THREE.Mesh
       if (!m.isMesh) return
@@ -525,20 +570,22 @@ function GltfModel({
       progressRef.current +=
         (target - progressRef.current) * Math.min(1, delta * 12)
     } else if (m.attractFlourishActive && st) {
-      // Attract idle flourish: slow explode → hold → reassemble (the spin keeps
-      // running, owned by ModelMotion). Eased target, gently smoothed.
+      // Attract lifecycle explode: assemble-in (parts fly together) → hold while
+      // the 360° turn runs (ModelMotion) → disassemble-out (parts fly apart = the
+      // exit). progress: 1 → 0 → 0 → 1. Eased target, gently smoothed.
       const e = performance.now() - m.attractFlourishStart
       let target: number
-      if (e < ATTRACT_EXPLODE_MS) {
-        target = easeInOut(e / ATTRACT_EXPLODE_MS)
-      } else if (e < ATTRACT_EXPLODE_MS + ATTRACT_HOLD_MS) {
-        target = 1
+      if (e < ATTRACT_ASSEMBLE_MS) {
+        target = 1 - easeInOut(e / ATTRACT_ASSEMBLE_MS)
+      } else if (e < ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS) {
+        target = 0
       } else {
-        const a = (e - ATTRACT_EXPLODE_MS - ATTRACT_HOLD_MS) / ATTRACT_ASSEMBLE_MS
-        target = 1 - easeInOut(Math.min(1, a))
+        const a =
+          (e - ATTRACT_ASSEMBLE_MS - ATTRACT_SPIN_MS) / ATTRACT_DISASSEMBLE_MS
+        target = easeInOut(Math.min(1, a))
       }
       progressRef.current +=
-        (target - progressRef.current) * Math.min(1, delta * 8)
+        (target - progressRef.current) * Math.min(1, delta * 10)
     } else {
       const target = explodedRef.current ? 1 : 0
       progressRef.current +=
@@ -581,6 +628,34 @@ function GltfModel({
           }
         }
       })
+    }
+
+    // Attract opacity fade — tie material opacity to the assemble/disassemble so
+    // model swaps happen while invisible (opacity 0), softening the hand-off into
+    // a smooth dissolve rather than a hard cut. Fades IN over the first part of
+    // assemble, holds opaque through the spin, fades OUT over the last part of
+    // disassemble. On lifecycle end (e.g. user taps → reveal flourish) opacity is
+    // restored to each material's original exactly once.
+    const inAttractFade = attractRef.current && m.attractFlourishActive
+    if (inAttractFade) {
+      const e = performance.now() - m.attractFlourishStart
+      let k: number
+      if (e < ATTRACT_ASSEMBLE_MS) {
+        k = Math.min(1, e / (ATTRACT_ASSEMBLE_MS * 0.6))
+      } else if (e < ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS) {
+        k = 1
+      } else {
+        const d = (e - ATTRACT_ASSEMBLE_MS - ATTRACT_SPIN_MS) / ATTRACT_DISASSEMBLE_MS
+        k = 1 - Math.min(1, Math.max(0, (d - 0.4) / 0.6))
+      }
+      setModelOpacity(scene, k)
+      attractFadeRef.current = true
+    } else if (attractFadeRef.current && !attractRef.current) {
+      // Left attract entirely (user tapped → active): restore full opacity once.
+      // At a NORMAL cycle end attract stays true and the model swaps while still
+      // invisible, so we deliberately leave opacity near 0 (no pre-swap flash).
+      setModelOpacity(scene, 1)
+      attractFadeRef.current = false
     }
   })
 
@@ -858,6 +933,24 @@ function ModelMotion({ modelGroupRef, attract, motionRef, calibrate }: ModelMoti
       return
     }
 
+    if (m.attractFlourishActive) {
+      // Attract lifecycle: spin ONLY during the middle window (assembled), and
+      // there do exactly one 360° turn — a sin(πt) bell integrates to 2π. While
+      // the parts fly together (assemble) / apart (disassemble) the model holds
+      // still so the motion reads clearly.
+      const e = now - m.attractFlourishStart
+      const spinStart = ATTRACT_ASSEMBLE_MS
+      const spinEnd = ATTRACT_ASSEMBLE_MS + ATTRACT_SPIN_MS
+      if (e >= spinStart && e < spinEnd) {
+        const t = (e - spinStart) / ATTRACT_SPIN_MS
+        speed.current = ATTRACT_SPIN_PEAK * Math.sin(Math.PI * t)
+        g.rotation.y += speed.current * delta
+      } else {
+        speed.current = 0
+      }
+      return
+    }
+
     let target: number
     if (attract) {
       target = IDLE_SPIN
@@ -905,7 +998,6 @@ export function KioskCanvas({
   attract = false,
   onModelError,
   prefetchUrl,
-  attractExplode = false,
   onAttractAdvance,
   modelRotation,
   exploded = false,
@@ -993,19 +1085,16 @@ export function KioskCanvas({
   // Attract loop sequencing. `modelReady` flips true once the active model has
   // loaded + been measured (GltfModel reports explodable at the end of its fit
   // pass — the precise "loaded, not half-loaded" signal, tied to the loading
-  // skeleton handoff). explodableRef rides along so the gate can read it without
-  // a render. Latest gate / advance callback are held in refs so the sequence
-  // effect doesn't restart when only those change.
+  // skeleton handoff). The advance callback is held in a ref so the sequence
+  // effect doesn't restart when only it changes. (The `attractExplode` prop is
+  // no longer read — every model now flourishes; kept on the interface for
+  // back-compat.)
   const [modelReady, setModelReady] = useState(false)
-  const explodableRef = useRef(false)
-  const attractExplodeRef = useRef(attractExplode)
-  attractExplodeRef.current = attractExplode
   const onAttractAdvanceRef = useRef(onAttractAdvance)
   onAttractAdvanceRef.current = onAttractAdvance
 
   const handleExplodable = useCallback(
     (explodable: boolean) => {
-      explodableRef.current = explodable
       setModelReady(true)
       onExplodableChange?.(explodable)
     },
@@ -1056,22 +1145,29 @@ export function KioskCanvas({
   const onZoomOut = () => dolly(1.22)
   const onResetView = () => orbitControlsRef.current?.reset()
 
-  // Crossfade: when the model url changes, fade the canvas out to the bg, swap
-  // the model while invisible (it's been prefetched by the attract loop), then
-  // fade back in. One WebGL context, no double-mount.
+  // Model swap. ACTIVE (user switching products): crossfade — fade out to bg,
+  // swap while invisible (prefetched), fade back in. ATTRACT: NO fade — the swap
+  // is hidden by the explode lifecycle (old model just disassembled to bits, new
+  // one starts exploded and assembles in), so we swap instantly and stay opaque.
+  // One WebGL context, no double-mount either way.
   const [activeUrl, setActiveUrl] = useState(modelUrl)
   const [opacity, setOpacity] = useState(1)
   useEffect(() => {
     if (modelUrl === activeUrl) return
-    setOpacity(0)
     // A new model is incoming — it's not "ready" until it loads + measures.
     setModelReady(false)
+    if (attract) {
+      setActiveUrl(modelUrl)
+      setOpacity(1)
+      return
+    }
+    setOpacity(0)
     const t = setTimeout(() => {
       setActiveUrl(modelUrl)
       setOpacity(1)
     }, CROSSFADE_HALF_MS)
     return () => clearTimeout(t)
-  }, [modelUrl, activeUrl])
+  }, [modelUrl, activeUrl, attract])
 
   // Attract per-model sequence: once the active model has loaded + faded in
   // (modelReady && opacity === 1), let it settle, then — if it's gated AND
@@ -1101,32 +1197,18 @@ export function KioskCanvas({
       return clearAll
     }
 
-    // Arrived. Gate the flourish on the per-model flag AND real explodability;
-    // everything else just rotates for the dwell (graceful degrade).
-    const doFlourish = attractExplodeRef.current && explodableRef.current
-    if (doFlourish) {
-      timers.push(
-        setTimeout(() => {
-          m.attractFlourishActive = true
-          m.attractFlourishStart = performance.now()
-        }, ATTRACT_SETTLE_MS),
-      )
-      timers.push(
-        setTimeout(() => {
-          m.attractFlourishActive = false
-        }, ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS),
-      )
-      timers.push(
-        setTimeout(
-          () => onAttractAdvanceRef.current?.(),
-          ATTRACT_SETTLE_MS + ATTRACT_FLOURISH_MS + ATTRACT_POST_FLOURISH_MS,
-        ),
-      )
-    } else {
-      timers.push(
-        setTimeout(() => onAttractAdvanceRef.current?.(), ATTRACT_PLAIN_DWELL_MS),
-      )
-    }
+    // Arrived (fully exploded for explodable models). Run the lifecycle:
+    // assemble-in → 360° turn → disassemble-out, then advance IMMEDIATELY — the
+    // disassemble IS the exit, so the next model assembles in with no fade or
+    // dwell. Explodable models fly their parts; non-explodable ones hold + turn.
+    m.attractFlourishActive = true
+    m.attractFlourishStart = performance.now()
+    timers.push(
+      setTimeout(() => {
+        m.attractFlourishActive = false
+        onAttractAdvanceRef.current?.()
+      }, ATTRACT_LIFECYCLE_MS),
+    )
     return clearAll
   }, [attract, modelReady, opacity, activeUrl, calibrating])
 
@@ -1170,7 +1252,7 @@ export function KioskCanvas({
       }}
     >
       <Canvas
-        shadows
+        shadows={{ type: THREE.PCFShadowMap }}
         camera={{
           position: [0, 0, 5.5],
           fov: orientation === 'portrait' ? 34 : 30,
@@ -1206,6 +1288,7 @@ export function KioskCanvas({
                 url={activeUrl}
                 fitZRef={fitZRef}
                 modelGroupRef={modelGroupRef}
+                attract={attract}
                 exploded={exploded}
                 explodeConfig={explodeConfig}
                 onExplodableChange={handleExplodable}
