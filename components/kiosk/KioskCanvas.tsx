@@ -162,6 +162,10 @@ interface OrbitControlsLike {
 }
 
 const TARGET_MAX_DIM = 0.88
+// Fraction of the frame the model's bounding sphere fills at the full (active)
+// fit — lower = camera pushed back = model occupies less of the screen. Applies
+// uniformly to every model in BOTH modes (attract scales this by ATTRACT_FIT).
+const FRAME_FILL = 0.62
 // Attract framing relative to the full active fit (<1 = closer/bigger). Tighter
 // than active so the lone model dominates the frame (magnet from a distance);
 // the aspect-aware fit keeps it fully visible with margin in both orientations.
@@ -396,14 +400,14 @@ function GltfModel({
     const persp = camera as THREE.PerspectiveCamera
     const fov = persp.fov ?? 30
 
-    // Aspect-aware: fit the sphere to BOTH FOV axes (margin via 0.8) and take the
+    // Aspect-aware: fit the sphere to BOTH FOV axes (margin via FRAME_FILL) and take the
     // farther distance. Landscape → vertical term wins; narrow portrait → the
     // horizontal term wins, so wide/long models don't overflow the side edges.
     const vHalf = (fov * Math.PI) / 360
     const aspect = size.width / Math.max(size.height, 1)
     const hHalf = Math.atan(Math.tan(vHalf) * aspect)
-    const fitV = diag / (2 * Math.tan(vHalf) * 0.8)
-    const fitH = diag / (2 * Math.tan(hHalf) * 0.8)
+    const fitV = diag / (2 * Math.tan(vHalf) * FRAME_FILL)
+    const fitH = diag / (2 * Math.tan(hHalf) * FRAME_FILL)
     const fitZ = Math.max(fitV, fitH)
 
     persp.near = Math.max(fitZ / 1000, 0.01)
@@ -1248,7 +1252,7 @@ export function KioskCanvas({
       }}
     >
       <Canvas
-        shadows
+        shadows={{ type: THREE.PCFShadowMap }}
         camera={{
           position: [0, 0, 5.5],
           fov: orientation === 'portrait' ? 34 : 30,

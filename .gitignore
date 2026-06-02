@@ -50,3 +50,6 @@ _incoming_models/
 # source CAD/OBJ files for model conversion — kept local only
 /Small caliber ammunition (1)/
 _incoming_models/
+
+# local-only backups of heavy models before optimization
+/_model_originals/
