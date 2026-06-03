@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { GLTFLoader } from 'three-stdlib'
+import { GLTFLoader, MeshoptDecoder } from 'three-stdlib'
 import type { GLTF } from 'three-stdlib'
 import * as THREE from 'three'
 
@@ -64,6 +64,14 @@ export function useModelWarmup(enabled = true): WarmupProgress {
     let cancelled = false
     const loader = new GLTFLoader()
     gltfLoaderExtender(loader)
+    // Several models are Meshopt-compressed (.glb). drei's useGLTF wires up the
+    // Meshopt decoder automatically; this standalone loader must do the same or
+    // those models throw on parse ("setMeshoptDecoder must be called…"). Mirror
+    // drei's exact call. (No model uses Draco, so no DRACOLoader needed — and it
+    // would only add a cross-origin decoder dependency.)
+    loader.setMeshoptDecoder(
+      typeof MeshoptDecoder === 'function' ? MeshoptDecoder() : MeshoptDecoder,
+    )
 
     const dispose = (gltf: GLTF) => {
       gltf.scene.traverse((obj) => {
