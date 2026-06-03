@@ -1,0 +1,298 @@
+{
+  "_groups": {
+    "upright": {
+      "tilt": [
+        -5,
+        -15,
+        0
+      ]
+    },
+    "cartridge": {
+      "tilt": [
+        18,
+        0,
+        14
+      ]
+    },
+    "box": {
+      "tilt": [
+        -15,
+        -22,
+        0
+      ]
+    },
+    "rod": {
+      "tilt": [
+        11.25,
+        25.7,
+        -22.5
+      ]
+    }
+  },
+  "models": {
+    "projectile-155-mm-he-m107": {
+      "group": "upright",
+      "align": [
+        0,
+        0,
+        0
+      ]
+    },
+    "round-152-mm-he-with-full-charge": {
+      "group": "upright",
+      "align": [
+        0,
+        0,
+        0
+      ]
+    },
+    "round-122-mm-he-with-full-charge": {
+      "group": "upright",
+      "align": [
+        0,
+        180,
+        0
+      ]
+    },
+    "mortar-round-120-mm-he": {
+      "group": "upright",
+      "align": [
+        0,
+        180,
+        0
+      ],
+      "override": [
+        167,
+        14,
+        165
+      ]
+    },
+    "propelling-charge-m4a2-charge-7": {
+      "group": "upright",
+      "align": [
+        0,
+        180,
+        0
+      ]
+    },
+    "round-pg-7vm": {
+      "group": "upright",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        -54,
+        21,
+        35
+      ]
+    },
+    "round-tb-7vm": {
+      "group": "upright",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        2,
+        -33,
+        60
+      ]
+    },
+    "shaped-charge-beehive": {
+      "group": "upright",
+      "align": [
+        0,
+        180,
+        0
+      ]
+    },
+    "scorpio-223-rem-fmj-356g": {
+      "group": "cartridge",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        -120,
+        -141,
+        14
+      ]
+    },
+    "scorpio-556x45-m193-nato": {
+      "group": "cartridge",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        18,
+        135,
+        14
+      ]
+    },
+    "scorpio-762x39-fmj-8g": {
+      "group": "cartridge",
+      "align": [
+        0,
+        90,
+        0
+      ],
+      "override": [
+        42,
+        40,
+        90
+      ]
+    },
+    "scorpio-9mm-luger-fmj-75g": {
+      "group": "cartridge",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        27,
+        135,
+        14
+      ]
+    },
+    "scorpio-9mm-luger-tfmj-8g": {
+      "group": "cartridge",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        23,
+        128,
+        14
+      ]
+    },
+    "scorpio-9x19-fmj-8g-nato": {
+      "group": "cartridge",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        22,
+        130,
+        14
+      ]
+    },
+    "scorpio-308-win-fmj-950g": {
+      "group": "cartridge",
+      "align": [
+        0,
+        270,
+        0
+      ],
+      "override": [
+        35,
+        36,
+        90
+      ]
+    },
+    "demolition-charge-hayrick": {
+      "group": "box",
+      "align": [
+        0,
+        225,
+        0
+      ],
+      "override": [
+        179,
+        -64,
+        -180
+      ]
+    },
+    "demolition-charge-tnt-250-g": {
+      "group": "box",
+      "align": [
+        0,
+        180,
+        0
+      ],
+      "override": [
+        -148,
+        41,
+        -180
+      ]
+    },
+    "demolition-charge-tnt-500-g": {
+      "group": "box",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        15,
+        -50,
+        0
+      ]
+    },
+    "black-dough": {
+      "group": "box",
+      "align": [
+        0,
+        90,
+        0
+      ],
+      "override": [
+        11,
+        52,
+        0
+      ]
+    },
+    "bangalore-torpedo-4-x-6-ft": {
+      "group": "rod",
+      "align": [
+        0,
+        0,
+        0
+      ]
+    },
+    "bangalore-torpedo-8-x-1-m": {
+      "group": "rod",
+      "align": [
+        0,
+        0,
+        0
+      ]
+    },
+    "rocket-122-mm-he-grad": {
+      "group": "rod",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        15,
+        -41,
+        -22
+      ]
+    },
+    "round-pg-7vm-practice-t": {
+      "group": "rod",
+      "align": [
+        0,
+        0,
+        0
+      ],
+      "override": [
+        3,
+        -45,
+        -22
+      ]
+    }
+  }
+}

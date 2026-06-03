@@ -23,6 +23,7 @@
       "NEQ (kg);": "211,2"
     },
     "model3D": "/models/bangalore_torpedo_4x6ft/Bangalore_torpedo_4x6ft.gltf",
+    "modelRotation": [11.25, 25.7, -22.5],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/tahla-naloz-bangalore-torpedo-46ft"
@@ -51,6 +52,7 @@
       "NEQ (kg);": "88"
     },
     "model3D": "/models/bangalore_torpedo_8x1m/Bangalore_torpedo_8x1m.gltf",
+    "modelRotation": [11.25, 25.7, -22.5],
     "visible": true,
     "featured": false,
     "webUrl": null
@@ -78,9 +80,41 @@
       "NEQ (kg);": "440"
     },
     "model3D": "/models/hayrick/Hayrick.gltf",
+    "modelRotation": [179, -64, -180],
     "visible": true,
     "featured": false,
-    "webUrl": "https://www.stvgroup.cz/produkt/demolicni-naloz-hayrick"
+    "webUrl": "https://www.stvgroup.cz/produkt/demolicni-naloz-hayrick",
+    "explode": {
+      "mode": "axial",
+      "axisOverride": "y",
+      "partOverrides": {
+        "HAY-23-0110": [
+          0,
+          0,
+          0
+        ],
+        "HAY-23-0039": [
+          0,
+          0,
+          0
+        ],
+        "HAY-23-0111_Stlačeno": [
+          0,
+          120,
+          0
+        ],
+        "HAY-23-0112_Stlačeno": [
+          0,
+          200,
+          0
+        ],
+        "HAY-23-0130": [
+          0,
+          280,
+          0
+        ]
+      }
+    }
   },
   {
     "id": "demolition-charge-tnt-250-g",
@@ -107,6 +141,7 @@
       "NEQ (kg);": "720"
     },
     "model3D": "/models/tnt_250g/TNT_250g.gltf",
+    "modelRotation": [-148, 41, -180],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/demolicni-nalozky-tnt",
@@ -137,6 +172,7 @@
       "NEQ (kg);": "720"
     },
     "model3D": "/models/tnt_500g/TNT_500g.gltf",
+    "modelRotation": [15, -50, 0],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/demolicni-nalozky-tnt",
@@ -166,6 +202,7 @@
       "NEQ (kg);": "177"
     },
     "model3D": "/models/beehive/Beehive.gltf",
+    "modelRotation": [175, 15, -180],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/kumulativni-naloz-beehive",
@@ -225,12 +262,13 @@
       "NEQ (kg);": "540"
     },
     "model3D": "/models/black_dough/Black_dough.gltf",
+    "modelRotation": [11, 52, 0],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/plasticka-trhavina-black-dough",
     "explode": {
       "mode": "axial",
-      "axisOverride": "z",
+      "axisOverride": "y",
       "partOverrides": {
         "MAT00029103_VýchozíSM-FLAT-PATTERN": [
           0,
@@ -239,13 +277,13 @@
         ],
         "BPD-24-1071": [
           0,
-          0,
-          140
+          -110,
+          0
         ],
         "S4-BPD-0922": [
           0,
           0,
-          170
+          0
         ]
       }
     }
@@ -277,6 +315,7 @@
       "NEQ (kg)": "64,5"
     },
     "model3D": "/models/mortar_120mm_he/Mina_120_HE.gltf",
+    "modelRotation": [167, 14, 165],
     "visible": true,
     "featured": false,
     "webUrl": null
@@ -302,6 +341,7 @@
       "Use": "The projectile 155mm HE M107 is used as a part of complete round 155mm HE M107 which consists of projectile with fuze, propelling charge and primer. The round 155mm HE M107 is fired from 155mm howitzers and is used for blast effect and fragmentation."
     },
     "model3D": "/models/projectile_155mm_he_m107/155_mm_HE_M107.gltf",
+    "modelRotation": [-5, -15, 0],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/naboj-155-mm-tristivo-trhavy"
@@ -333,9 +373,34 @@
       "NEQ (kg)": "~167"
     },
     "model3D": "/models/propelling_charge_m4a2_charge_7/M4A2_Charge7.gltf",
+    "modelRotation": [175, 15, -180],
     "visible": true,
     "featured": false,
-    "webUrl": "https://www.stvgroup.cz/produkt/hnaci-napln-m4a2"
+    "webUrl": "https://www.stvgroup.cz/produkt/hnaci-napln-m4a2",
+    "explode": {
+      "partOverrides": {
+        "MATV3057317_VÍKO": [
+          0,
+          -88,
+          0
+        ],
+        "MATV3057317_VÍKO_1": [
+          0,
+          -88,
+          0
+        ],
+        "MATV3057317_VÍKO_2": [
+          0,
+          -88,
+          0
+        ],
+        "MATV3057317_VÍKO_3": [
+          0,
+          -88,
+          0
+        ]
+      }
+    }
   },
   {
     "id": "rocket-122-mm-he-grad",
@@ -364,6 +429,7 @@
       "NEQ (kg)": "427,2"
     },
     "model3D": "/models/rocket_122mm_he_grad/122_GRAD.glb",
+    "modelRotation": [15, -41, -22],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/raketa-122-mm-grad"
@@ -398,6 +464,7 @@
       "Primer screw": "KV-4; KW-13; KV-13U"
     },
     "model3D": "/models/round_152mm_he_full/152_full.glb",
+    "modelRotation": [-5, -15, 0],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/152-mm"
@@ -433,6 +500,7 @@
       "NEQ (kg)": "~146"
     },
     "model3D": "/models/round_122mm_he_full/122_mm_HE.glb",
+    "modelRotation": [175, 15, -180],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/naboj-122-mm-he-pro-kanon-d-30-nebo-samohybnou-houfnici-2s1-gvozdika"
@@ -484,6 +552,7 @@
       "NEQ (kg)": "57"
     },
     "model3D": "/models/pg_7vm/PG_7VM.glb",
+    "modelRotation": [-54, 21, 35],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
@@ -530,6 +599,7 @@
       "NEQ (kg)": "27"
     },
     "model3D": "/models/pg_7vm_practice_t/PG-7VM-PRACTICE-T.glb",
+    "modelRotation": [3, -45, -22],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
@@ -579,6 +649,7 @@
       "NEQ (kg);": "82,5"
     },
     "model3D": "/models/tb_7vm/TB_7VM.glb",
+    "modelRotation": [2, -33, 60],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/munice-pro-rpg-7"
@@ -599,6 +670,7 @@
       "Application": "Training, law enforcement"
     },
     "model3D": "/models/scorpio_223_rem/223_Rem.gltf",
+    "modelRotation": [-120, -141, 14],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-223-rem-55gr-fmj-cz"
@@ -619,6 +691,7 @@
       "Application": "Military, sniper training"
     },
     "model3D": "/models/scorpio_308_win/308_Win.gltf",
+    "modelRotation": [35, 36, 90],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-308-win-cz"
@@ -639,6 +712,7 @@
       "Application": "Military"
     },
     "model3D": "/models/scorpio_556x45_nato/556x45_NATO.gltf",
+    "modelRotation": [18, 135, 14],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-556x45-mm-cz"
@@ -659,6 +733,7 @@
       "Application": "Military, law enforcement"
     },
     "model3D": "/models/scorpio_762x39/STVT-Scorpio-7_62x39.gltf",
+    "modelRotation": [42, 40, 90],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-762x39-123gr-fmj"
@@ -679,6 +754,7 @@
       "Application": "Law enforcement, training"
     },
     "model3D": "/models/scorpio_9mm_luger_fmj_75g/Flyer_Scorpio_9mm_Luger_FMJ_75g.glb",
+    "modelRotation": [27, 135, 14],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-9-mm-luger-cz"
@@ -699,6 +775,7 @@
       "Application": "Law enforcement"
     },
     "model3D": "/models/scorpio_9mm_luger_tfmj_8g/9mm_Luger_TFMJ_8g.gltf",
+    "modelRotation": [23, 128, 14],
     "visible": true,
     "featured": false,
     "webUrl": null
@@ -719,6 +796,7 @@
       "Application": "Military"
     },
     "model3D": "/models/scorpio_9x19_fmj_8g_nato/9x19_FMJ_8g_NATO.gltf",
+    "modelRotation": [22, 130, 14],
     "visible": true,
     "featured": false,
     "webUrl": "https://www.stvgroup.cz/produkt/scorpio-9-mm-nato-cz"
