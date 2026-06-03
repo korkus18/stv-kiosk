@@ -13,8 +13,10 @@ import type { CategoryId } from '@/data/categories'
 import { useOrientation } from '@/hooks/useOrientation'
 import { useKioskMode } from '@/hooks/useKioskMode'
 import { useAttractLoop } from '@/hooks/useAttractLoop'
+import { useModelWarmup } from '@/hooks/useModelWarmup'
 import { KioskLandscape } from '@/components/kiosk/KioskLandscape'
 import { KioskPortrait } from '@/components/kiosk/KioskPortrait'
+import { OfflineReadyIndicator } from '@/components/OfflineReadyIndicator'
 import type { KioskSharedProps } from '@/components/kiosk/utils'
 
 /** Attract defaults the kiosk returns to after a visitor leaves. */
@@ -81,6 +83,10 @@ export default function KioskPage() {
   }, [])
 
   const orientation = useOrientation()
+
+  // Background offline warm-up: load every model once (while online) so the
+  // service worker caches all assets — after this the kiosk runs fully offline.
+  const warmup = useModelWarmup()
 
   // State machine lives here, above the layout components, so attract/active
   // behave identically in both orientations. On reset we wipe the previous
@@ -174,9 +180,14 @@ export default function KioskPage() {
     onExplodableChange: setExplodable,
   }
 
-  return orientation === 'portrait' ? (
-    <KioskPortrait {...sharedProps} />
-  ) : (
-    <KioskLandscape {...sharedProps} />
+  return (
+    <>
+      {orientation === 'portrait' ? (
+        <KioskPortrait {...sharedProps} />
+      ) : (
+        <KioskLandscape {...sharedProps} />
+      )}
+      <OfflineReadyIndicator progress={warmup} />
+    </>
   )
 }
