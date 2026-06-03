@@ -1109,11 +1109,21 @@ export function KioskCanvas({
   useEffect(() => {
     if (!calibrationEnabled) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'c' || e.key === 'C') setCalibrate((v) => !v)
+      if (e.key !== 'c' && e.key !== 'C') return
+      // Only calibrate an actively-selected model. In the attract loop the
+      // model auto-swaps on a timer, so freezing a pose there would target a
+      // model that's about to vanish — ignore the toggle until a product is open.
+      if (attract) return
+      setCalibrate((v) => !v)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [calibrationEnabled])
+  }, [calibrationEnabled, attract])
+  // If the kiosk falls back to attract mid-calibration (e.g. idle timeout), drop
+  // out of calibrate so we never dial a swapping attract model.
+  useEffect(() => {
+    if (attract && calibrate) setCalibrate(false)
+  }, [attract, calibrate])
   const calibrating = calibrationEnabled && calibrate
 
   // One-time "drag to rotate" hint — shows on the FIRST activation of the

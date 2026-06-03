@@ -83,13 +83,15 @@ export default function KioskPage() {
   const orientation = useOrientation()
 
   // State machine lives here, above the layout components, so attract/active
-  // behave identically in both orientations. On reset we wipe any trace of the
-  // previous visitor: category + selected product back to attract defaults.
-  // (Camera/zoom reset is owned by the canvas — wired in a later step.)
+  // behave identically in both orientations. On reset we wipe the previous
+  // visitor's category filter, but KEEP the currently shown model so the attract
+  // loop resumes FROM it (continuing to the next pool item) rather than snapping
+  // back to the first. If that model isn't in the attract pool (no 3D / not
+  // featured), useAttractLoop falls back to pool[0]. Exploded view resets via
+  // the `mode !== 'active'` effect below; camera/zoom reset is owned by the canvas.
   const { mode, activate, resetToAttract } = useKioskMode({
     onReset: () => {
       setActiveCategory(ATTRACT_DEFAULT_CATEGORY)
-      setSelectedProductId(attractDefaultId)
     },
   })
   void resetToAttract // exposed for later steps (e.g. an explicit exit button)
